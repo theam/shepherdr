@@ -460,9 +460,15 @@ private struct SessionRowView: View {
 
     private func pullsButton(_ pulls: [SessionResource]) -> some View {
         let label = pulls.count == 1 ? Self.number(of: pulls[0]) : "\(pulls.count) PRs"
+        // Lilac once its pull requests landed, as in Resources: the session's work is in.
+        let tint = switch model.checksMonitor.outcome(of: pulls) {
+        case .landed: Theme.lilac
+        case .dropped: Theme.dim
+        case nil: Theme.phosphor
+        }
         return Button { model.openPullRequests(of: row.id) } label: {
             HStack(spacing: 4) {
-                Text("⇄ " + label).foregroundStyle(Theme.phosphor.opacity(0.85))
+                Text("⇄ " + label).foregroundStyle(tint.opacity(0.85))
                 ChecksMark(state: model.checksMonitor.state(of: pulls))
             }
             .contentShape(Rectangle())

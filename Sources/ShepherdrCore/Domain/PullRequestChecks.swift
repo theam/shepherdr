@@ -113,7 +113,7 @@ extension GitHubLookup {
         return result
     }
 
-    private static func isPlainName(_ name: String) -> Bool {
+    static func isPlainName(_ name: String) -> Bool {
         name.range(of: #"^[A-Za-z0-9_.-]+$"#, options: .regularExpression) != nil
     }
 }

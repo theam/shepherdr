@@ -1,13 +1,16 @@
 import AppKit
 import ShepherdrCore
 
-/// Watches the CI checks of the pull requests of the session on screen, through the GitHub CLI:
-/// one GraphQL query for all of them, every 15 seconds while checks run and every 2 minutes once
-/// they're done, paused while the Mac sleeps. A notification tells you when checks finish.
+/// Watches the CI checks of the pull requests of the session on screen, and whether its issues are
+/// still open, through the GitHub CLI: one GraphQL query for its pull requests and one for its
+/// issues, every 15 seconds while checks run and every 2 minutes once they're done, paused while
+/// the Mac sleeps. A notification tells you when checks finish.
 @MainActor @Observable
 final class ChecksMonitor {
     /// The last known checks of each pull request, by resource key.
     private(set) var checks: [String: PullRequestChecks] = [:]
+    /// The last known state of each issue, by resource key.
+    private(set) var issues: [String: IssueState] = [:]
     @ObservationIgnored weak var model: AppModel?
     @ObservationIgnored private let gitHub = GitHubLookup()
     @ObservationIgnored private var watched: Agent.ID?
@@ -67,6 +70,7 @@ final class ChecksMonitor {
 
     private func poll(_ id: Agent.ID) async -> Poll {
         guard !isAsleep, let model else { return .settled }
+        await pollIssues(id, model: model)
         // Open pull requests only: merged and closed ones are done.
         let pulls = model.pullRequests(of: id).filter { $0.github != nil && checks[$0.key]?.isOpen != false }.prefix(10)
         guard !pulls.isEmpty else { return .settled }
@@ -81,8 +85,36 @@ final class ChecksMonitor {
         return found.values.contains { $0.isOpen && $0.isRunning } ? .running : .settled
     }
 
+    /// Open issues only, like pull requests: closed ones are done.
+    private func pollIssues(_ id: Agent.ID, model: AppModel) async {
+        let open = model.issues(of: id).filter { $0.github != nil && issues[$0.key]?.isOpen != false }.prefix(10)
+        guard !open.isEmpty, let found = await gitHub.issueStates(of: Array(open)) else { return }
+        issues.merge(found) { _, latest in latest }
+    }
+
     /// One mark for several pull requests.
     func state(of pulls: [SessionResource]) -> PullRequestChecks.State? {
         PullRequestChecks.combined(pulls.compactMap { checks[$0.key] })
+    }
+
+    /// How a pull request or issue ended: landed (merged, or completed) or dropped (closed without
+    /// merging, not planned, a duplicate).
+    enum Outcome { case landed, dropped }
+
+    /// Nil while it's open or GitHub hasn't said.
+    func outcome(of resource: SessionResource) -> Outcome? {
+        if let pull = checks[resource.key], !pull.isOpen { return pull.isMerged ? .landed : .dropped }
+        return switch issues[resource.key] {
+        case .completed: .landed
+        case .notPlanned, .duplicate: .dropped
+        case .open, nil: nil
+        }
+    }
+
+    /// How several pull requests ended: nil while any may still be open, landed if any merged.
+    func outcome(of pulls: [SessionResource]) -> Outcome? {
+        let outcomes = pulls.map(outcome(of:))
+        guard !outcomes.isEmpty, !outcomes.contains(nil) else { return nil }
+        return outcomes.contains(.landed) ? .landed : .dropped
     }
 }

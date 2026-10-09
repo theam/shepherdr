@@ -529,6 +529,11 @@ final class AppModel {
         SessionResources.ranked(resources(for: id), kind: .pullRequest)
     }
 
+    /// The session's issues, most relevant first.
+    func issues(of id: Agent.ID) -> [SessionResource] {
+        SessionResources.ranked(resources(for: id), kind: .issue)
+    }
+
     /// Opens the session with one of its links in its browser, such as a pull request a notification is about.
     func openLink(_ url: URL, in id: Agent.ID) {
         open(id)

@@ -48,11 +48,10 @@ struct ResourcesPanel: View {
 
     private func row(_ resource: SessionResource) -> some View {
         let isOpen = workspace.browser.isVisible && workspace.browser.selected?.url == resource.url
-        let isMerged = checks.checks[resource.key]?.isMerged == true
         return Button { workspace.open(resource) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Text(Self.glyph(resource.kind)).font(Theme.mono(10.5, .bold))
-                    .foregroundStyle(isMerged ? Theme.lilac : Self.tint(resource.kind)).frame(width: 12)
+                    .foregroundStyle(tint(of: resource)).frame(width: 12)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 5) {
                         Text(resource.name).font(Theme.mono(11, .medium)).lineLimit(1).truncationMode(.middle)
@@ -86,7 +85,7 @@ struct ResourcesPanel: View {
     private func help(for resource: SessionResource) -> String {
         var lines: [String] = []
         if let title = resource.title { lines.append(title) }
-        if checks.checks[resource.key]?.isMerged == true { lines.append("Merged") }
+        if let status = status(of: resource) { lines.append(status) }
         if let summary = checks.checks[resource.key]?.summary, !summary.isEmpty { lines.append("Checks: " + summary) }
         lines.append(resource.url.absoluteString)
         lines.append("Mentioned \(resource.mentions)× · opened \(resource.opens)×")
@@ -101,11 +100,28 @@ struct ResourcesPanel: View {
         }
     }
 
-    private static func tint(_ kind: SessionResource.Kind) -> Color {
-        switch kind {
-        case .pullRequest: Theme.phosphor
-        case .issue: Theme.amber
-        case .artifact: Theme.cyan
+    /// Its kind's color while open; lilac once it landed, as GitHub marks merged pull requests and
+    /// completed issues; dimmed once dropped.
+    private func tint(of resource: SessionResource) -> Color {
+        switch checks.outcome(of: resource) {
+        case .landed: Theme.lilac
+        case .dropped: Theme.dim
+        case nil:
+            switch resource.kind {
+            case .pullRequest: Theme.phosphor
+            case .issue: Theme.amber
+            case .artifact: Theme.cyan
+            }
+        }
+    }
+
+    private func status(of resource: SessionResource) -> String? {
+        if let pull = checks.checks[resource.key], !pull.isOpen { return pull.isMerged ? "Merged" : "Closed without merging" }
+        return switch checks.issues[resource.key] {
+        case .completed: "Closed as completed"
+        case .notPlanned: "Closed as not planned"
+        case .duplicate: "Closed as a duplicate"
+        case .open, nil: nil
         }
     }
 }
