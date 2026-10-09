@@ -743,11 +743,15 @@ final class AppModel {
         }
     }
 
-    /// The folders agents on a machine work in, the most used first. Worktrees are left out: they
-    /// belong to the session that made them.
+    /// The folders agents on a machine work in, the most used first, then those of shells still
+    /// waiting for an agent. Worktrees are left out: they belong to the session that made them.
     func folders(on machineID: String) -> [FolderUse] {
-        FolderUse.ranked(cluster.agents.filter { $0.id.machineID == machineID }) { row in
-            cluster.checkout(machineID: machineID, workspaceID: row.agent.workspaceID)?.isLinkedWorktree == true
+        func isWorktree(_ workspaceID: String) -> Bool {
+            cluster.checkout(machineID: machineID, workspaceID: workspaceID)?.isLinkedWorktree == true
+        }
+        let shells = allShells.filter { $0.machine.id == machineID && !isWorktree($0.pane.workspaceID) }
+        return FolderUse.ranked(cluster.agents.filter { $0.id.machineID == machineID }, shells: shells.map(\.pane.directory)) { row in
+            isWorktree(row.agent.workspaceID)
         }
     }
 

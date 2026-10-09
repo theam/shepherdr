@@ -173,7 +173,17 @@ struct NewSessionSheet: View {
             }
         }
         .buttonStyle(ConsoleButtonStyle(tint: isChosen ? Theme.phosphor : Theme.dim))
-        .help("\(folder.path)\n\(folder.agents == 1 ? "1 agent works" : "\(folder.agents) agents work") here")
+        .help(([folder.path] + Self.uses(of: folder)).joined(separator: "\n"))
+    }
+
+    /// `2 agents work here`, `1 shell without an agent is open here`.
+    static func uses(of folder: FolderUse) -> [String] {
+        var uses: [String] = []
+        if folder.agents > 0 { uses.append(folder.agents == 1 ? "1 agent works here" : "\(folder.agents) agents work here") }
+        if folder.shells > 0 {
+            uses.append(folder.shells == 1 ? "1 shell without an agent is open here" : "\(folder.shells) shells without an agent are open here")
+        }
+        return uses
     }
 
     /// A folder's name, with its parent's when another folder has the same name.

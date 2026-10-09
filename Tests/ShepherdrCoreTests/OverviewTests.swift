@@ -58,6 +58,12 @@ struct OverviewTests {
         #expect(folders == [FolderUse(path: "/p/herdr", agents: 2), FolderUse(path: "/p/api", agents: 1),
                             FolderUse(path: "/p/shepherdr", agents: 1)])
         #expect(FolderUse.ranked(rows, limit: 1).map(\.path) == ["/p/herdr"])
+        // Shells still without an agent add their folders after the agents' ones.
+        let withShells = FolderUse.ranked(rows, shells: ["/p/api/", "/p/notes", "/p/notes", "/p/web", nil, "~"],
+                                          excluding: { $0.workspace == "d" })
+        #expect(withShells == [FolderUse(path: "/p/herdr", agents: 2), FolderUse(path: "/p/api", agents: 1, shells: 1),
+                               FolderUse(path: "/p/shepherdr", agents: 1), FolderUse(path: "/p/notes", agents: 0, shells: 2),
+                               FolderUse(path: "/p/web", agents: 0, shells: 1)])
     }
 
     @Test func usageIsReadFromTheScriptsLine() {

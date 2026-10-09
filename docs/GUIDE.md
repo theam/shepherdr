@@ -19,7 +19,7 @@ The sidebar is your prioritized queue of sessions. Pick one and its live termina
 - **Picks up where you left off:** after a restart, the session you had open comes back, and every session keeps its browser tabs, prompt editor and resources.
 - **Notifications:** a macOS notification tells you when an agent finishes or needs you, with what it last said, and when a pull request's checks finish. Click it to open the session.
 - **Sessions on hold:** mark a session as waiting for others, such as a planner waiting for the subagents it launched. It shows an hourglass, and the sessions it waits for are listed under it, in a tree you can collapse.
-- **Create and close sessions:** **⌘N** creates a Herdr workspace with a shell in a folder; start Claude Code, Codex or any other supported agent in it and it joins the queue. Create one in a group with its **+**, or next to a session with **New Session in Same Folder…**. **Close Session…** in a session's context menu ends its pane after confirmation. **Rename…** renames its Herdr workspace.
+- **Create and close sessions:** **⌘N** creates a Herdr workspace with a shell in a folder; start Claude Code, Codex or any other supported agent in it and it joins the queue. Create one in a group with its **+**, or next to a session with **New Session in Same Folder…** (**⇧⌘N**). **Close Session…** in a session's context menu ends its pane after confirmation. **Rename…** renames its Herdr workspace.
 - **Overview:** how many sessions need you, are working, done or idle, and a card per machine with its sessions and its processor, memory and disk use. Click states and machines to list the sessions in any combination of them. Plain shell panes are listed separately.
 - **Lid status:** the foot of the sidebar tells you whether it's safe to close the lid. While agents work on this Mac it warns you not to, since sleep would pause them; remote sessions don't count, they keep going.
 - **Machines** in **Settings → Machines** (⌘,): add SSH machines, disable them to stop polling, or remove them from Herdr's catalog.
@@ -109,11 +109,11 @@ You can reorder while filtering the queue (**⌘F**): movement is relative to th
 
 **⌘N** (or **+** in the sidebar) opens **New Session**: choose a folder (on the selected machine) and an optional name. Shepherdr runs `herdr workspace create --cwd … --label …` and opens its shell. Start an agent there as you would in any terminal: Herdr detects it, and the session joins the queue within one refresh.
 
-Below the folder, the folders agents on the selected machine work in are one click away, the most used first. Git worktrees are left out: they belong to the session that made them.
+Below the folder, the folders agents on the selected machine work in are one click away, the most used first, followed by those of shells still waiting for an agent. Git worktrees are left out: they belong to the session that made them.
 
 Shepherdr checks the folder on its machine first, over SSH for other machines, where `~` means that machine's home and a relative path starts there. If it doesn't exist, New Session offers to start a new project there: **NEW PROJECT** makes the folder, runs `git init` in it and opens the session. Herdr itself would open a missing folder's workspace in the home folder without a word.
 
-On this Mac, **CHOOSE…** always starts in your projects folder, `~/projects` unless you change it in **Settings → General**, and a folder name alone means a folder inside it. **New Session in Same Folder…** in a session's or shell's context menu prefills its folder and machine and places the new session right after it, in the same group. A group header's **+** places it in that group.
+On this Mac, **CHOOSE…** always starts in your projects folder, `~/projects` unless you change it in **Settings → General**, and a folder name alone means a folder inside it. **New Session in Same Folder…** in a session's or shell's context menu, or **⇧⌘N** for the one on screen, prefills its folder and machine and places the new session right after it, in the same group. A group header's **+** places it in that group.
 
 **Close Session…** in a session's context menu asks for confirmation, then runs `herdr pane close`. It is deliberately only in the context menu, away from everyday controls. This ends the agent process. When it is the workspace's last pane, Herdr closes the workspace too.
 

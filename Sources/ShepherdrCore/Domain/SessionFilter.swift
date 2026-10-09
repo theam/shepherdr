@@ -48,29 +48,37 @@ public struct SessionFilter: Equatable, Sendable {
     }
 }
 
-/// A folder agents work in, and how many of them do.
+/// A folder agents work in, and how many of them do; and how many shells, still without an
+/// agent, are open there.
 public struct FolderUse: Equatable, Sendable {
     public let path: String
     public let agents: Int
+    public let shells: Int
 
-    public init(path: String, agents: Int) {
+    public init(path: String, agents: Int, shells: Int = 0) {
         self.path = path
         self.agents = agents
+        self.shells = shells
     }
 
-    /// The folders of these sessions' agents, the most used first, leaving out those `excluded`
-    /// says to, such as worktrees.
-    public static func ranked(_ rows: [AgentRow], excluding excluded: (AgentRow) -> Bool = { _ in false },
+    /// The folders of these sessions' agents, the most used first, then those only shells are open
+    /// in, leaving out agents `excluded` says to, such as worktrees.
+    public static func ranked(_ rows: [AgentRow], shells: [String?] = [], excluding excluded: (AgentRow) -> Bool = { _ in false },
                               limit: Int = 8) -> [FolderUse] {
-        var counts: [String: Int] = [:]
-        for row in rows where !excluded(row) {
-            guard var path = row.agent.directory?.trimmingCharacters(in: .whitespacesAndNewlines), path.hasPrefix("/") else { continue }
+        func folder(_ directory: String?) -> String? {
+            guard var path = directory?.trimmingCharacters(in: .whitespacesAndNewlines), path.hasPrefix("/") else { return nil }
             while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-            counts[path, default: 0] += 1
+            return path
         }
-        return counts.map { FolderUse(path: $0.key, agents: $0.value) }
+        var counts: [String: (agents: Int, shells: Int)] = [:]
+        for row in rows where !excluded(row) {
+            if let path = folder(row.agent.directory) { counts[path, default: (0, 0)].agents += 1 }
+        }
+        for path in shells.compactMap(folder) { counts[path, default: (0, 0)].shells += 1 }
+        return counts.map { FolderUse(path: $0.key, agents: $0.value.agents, shells: $0.value.shells) }
             .sorted {
                 if $0.agents != $1.agents { return $0.agents > $1.agents }
+                if $0.shells != $1.shells { return $0.shells > $1.shells }
                 let names = ($0.path as NSString).lastPathComponent.localizedStandardCompare(($1.path as NSString).lastPathComponent)
                 return names == .orderedSame ? $0.path < $1.path : names == .orderedAscending
             }

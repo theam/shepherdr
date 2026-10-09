@@ -28,6 +28,11 @@ struct ShepherdrApp: App {
                 Button("New Session…") { model.startNewSession() }
                     .keyboardShortcut("n", modifiers: .command)
                     .disabled(model.onlineMachines.isEmpty)
+                Button("New Session in Same Folder…") {
+                    if let id = model.selectedID { model.startNewSession(besides: id) }
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(!(model.selectedID.map(model.canStartNewSession(besides:)) ?? false))
                 Divider()
                 Button("Refresh Sessions") { Task { await model.cluster.refresh() } }
                     .keyboardShortcut("r", modifiers: .command)
