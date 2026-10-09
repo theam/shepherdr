@@ -4,6 +4,8 @@ A native macOS console for the coding agents running in your [Herdr](https://her
 
 The sidebar is your prioritized queue of sessions. Pick one and its live terminal opens in the work area, with a composer underneath for the next prompt. Shepherdr is an independent, open-source client; it is not an official Herdr application and is not affiliated with the Herdr project.
 
+A bilingual (English/Spanish) quick guide with the same content is in [visual-guide.html](visual-guide.html); open it in a browser.
+
 ## Features
 
 - **Session queue:** every agent session in your own priority order, shown by workspace, what the agent is doing, and where it works: its folder, or for a Git worktree its project, in cyan. When a session has a pull request among its resources, its number is there too, or how many it has; click it to open the session with the pull request in its browser, or the ten most relevant in tabs. An agent that isn't working but left commands running, such as a dev server or a watcher, shows a turning clock **◴** instead of its state's mark. Drag to reorder, use the ▲▼ controls, **⌥⌘↑ / ⌥⌘↓**, or jump with **⌘1…⌘9**. Gather sessions into **groups** that you prioritize like a single session, each with its own internal order.
