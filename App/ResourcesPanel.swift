@@ -8,13 +8,22 @@ import ShepherdrCore
 struct ResourcesPanel: View {
     let workspace: SessionWorkspace
     let checks: ChecksMonitor
+    /// Hides the panel; the toolbar toggle is still there to bring it back.
+    let close: () -> Void
     private static let shown = 10
     @ViewState private var expanded = Set<SessionResource.Kind>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ConsoleHeader(title: "Resources", trailing: "\(workspace.visibleResources.count)")
-                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
+            HStack(spacing: 8) {
+                ConsoleHeader(title: "Resources", trailing: "\(workspace.visibleResources.count)")
+                Button(action: close) {
+                    Text("✕").font(Theme.mono(10.5, .semibold)).foregroundStyle(Theme.dim)
+                }
+                .buttonStyle(.plain)
+                .help("Close Resources panel — the ≡ button in the header brings it back")
+            }
+            .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(SessionResource.Kind.allCases, id: \.self) { kind in

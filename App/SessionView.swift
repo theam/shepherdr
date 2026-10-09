@@ -37,7 +37,8 @@ struct SessionView: View {
                 workArea
                 if showsResources && !workspace.visibleResources.isEmpty {
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    ResourcesPanel(workspace: workspace, checks: model.checksMonitor).frame(width: 230)
+                    ResourcesPanel(workspace: workspace, checks: model.checksMonitor) { showsResources = false }
+                        .frame(width: 230)
                 }
             }
         }
@@ -132,10 +133,14 @@ struct SessionView: View {
                 StateTag(state: agent.agent.state, stale: agent.isStale)
             }
             lockButton
-            Button { terminal.open() } label: { Text("↻") }
-                .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
-                .disabled(terminal.status == .connecting || !context.canConnect)
-                .help("Reconnect to this terminal")
+            HStack(spacing: 4) {
+                Button { terminal.open() } label: { Text("↻").frame(width: 16, height: 14) }
+                    .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
+                    .disabled(terminal.status == .connecting || !context.canConnect)
+                    .help("Reconnect to this terminal")
+                resourcesButton
+                browserButton
+            }
             Button { showDetails.toggle() } label: { Text("i") }
                 .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
                 .help("Session details")
@@ -168,6 +173,23 @@ struct SessionView: View {
         .help(locked ? "Locked: read-only. Click to unlock and type here (⌘E)"
                      : "Unlocked: typing and prompts go to this session. Click to lock it read-only (⌘E)")
         .accessibilityLabel(locked ? "Unlock session" : "Lock session")
+    }
+
+    private var resourcesButton: some View {
+        let links = workspace.visibleResources.count
+        return Button { showsResources.toggle() } label: { Text("≡").frame(width: 16, height: 14) }
+            .buttonStyle(ConsoleButtonStyle(tint: showsResources && links > 0 ? Theme.phosphor : Theme.dim))
+            .disabled(links == 0)
+            .help(links > 0 ? "Pull requests, issues and Claude artifacts this session linked to"
+                             : "Pull requests, issues and Claude artifacts this session links to gather here")
+    }
+
+    private var browserButton: some View {
+        Button { model.toggleBrowser() } label: {
+            Image(systemName: "globe").font(.system(size: 11, weight: .semibold)).frame(width: 16, height: 14)
+        }
+        .buttonStyle(ConsoleButtonStyle(tint: workspace.browser.isVisible ? Theme.phosphor : Theme.dim))
+        .help("This session's browser (⌘B). Its tabs stay open while you work elsewhere.")
     }
 
     // MARK: Banners and states
@@ -285,25 +307,6 @@ struct SessionView: View {
             key("↓", .down, help: "Down arrow")
             key("⏎", .enter, help: "Return")
             Spacer(minLength: 8)
-            if !compact {
-                Text(isLive ? "⇧⏎ new line · click a link to browse · ⌘-click opens your browser" : "locked · read-only · ⌘E to unlock")
-                    .font(Theme.mono(9.5)).foregroundStyle(Theme.faint).lineLimit(1).truncationMode(.head)
-                    .layoutPriority(-1)
-            }
-            let links = workspace.visibleResources.count
-            barToggle(compact ? (links > 0 ? "≡ \(links)" : "≡") : (links > 0 ? "≡ RESOURCES \(links)" : "≡ RESOURCES"),
-                      active: showsResources && links > 0,
-                      help: links > 0 ? "Pull requests, issues and Claude artifacts this session linked to"
-                                      : "Pull requests, issues and Claude artifacts this session links to gather here") {
-                showsResources.toggle()
-            }
-            .disabled(links == 0)
-            let tabs = workspace.browser.tabs.count
-            barToggle(compact ? (tabs > 0 ? "◫ \(tabs)" : "◫") : (tabs > 0 ? "◫ BROWSER \(tabs)" : "◫ BROWSER"),
-                      active: workspace.browser.isVisible,
-                      help: "This session's browser (⌘B). Its tabs stay open while you work elsewhere.") {
-                model.toggleBrowser()
-            }
         }
     }
 
