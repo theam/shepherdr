@@ -33,7 +33,7 @@ No worktree management, notifications, or menu-bar UI. Input goes only to the se
 
 Download the `.dmg` from [the latest GitHub release](../../../releases/latest), open it, and drag **Shepherdr.app** to **Applications**. A `.zip` of the same app and SHA-256 checksums are also available. Requires **Apple Silicon (M1 or later) and macOS 14 Sonoma or later**; no Xcode is needed to run the download.
 
-Current downloads have an **ad hoc signature and are not notarized by Apple**. If macOS blocks the first launch because the developer cannot be verified and you trust this download, use **System Settings → Privacy & Security → Open Anyway** for Shepherdr. Follow [Apple's instructions](https://support.apple.com/en-us/102445); managed Macs may require administrator approval.
+Downloads are **signed with The Agile Monkeys' Developer ID and notarized by Apple**, so macOS opens them after its usual confirmation for apps from the internet. Earlier versions had an ad hoc signature: if macOS blocks one of those and you trust the download, use **System Settings → Privacy & Security → Open Anyway** for Shepherdr, following [Apple's instructions](https://support.apple.com/en-us/102445).
 
 Install and start Herdr separately, then open Shepherdr. The app reads your existing sessions and saved machines. Installing the [GitHub CLI](https://cli.github.com) and signing in with `gh auth login` is recommended: see the requirements below.
 

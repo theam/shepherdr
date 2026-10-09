@@ -51,8 +51,7 @@ No accounts, no telemetry, no server. Shepherdr drives the `herdr` CLI you alrea
 
 1. Install and start [Herdr](https://herdr.dev/docs/), which Shepherdr needs (CLI 0.9.3 or later for remote machines and terminals).
 2. Recommended: install the [GitHub CLI](https://cli.github.com) and sign in with `gh auth login`. Shepherdr uses it to confirm pull requests and issues, private ones included, fetch their titles, and watch pull requests' CI checks; without it, those features are limited or off.
-3. Grab the `.dmg` from the [latest release](../../releases/latest) and drag **Shepherdr.app** to Applications. You need an Apple Silicon Mac with macOS 14 or later.
-4. Builds aren't notarized by Apple, so the first launch needs **System Settings → Privacy & Security → Open Anyway**.
+3. Grab the `.dmg` from the [latest release](../../releases/latest) and drag **Shepherdr.app** to Applications. You need an Apple Silicon Mac with macOS 14 or later. It's signed and notarized by Apple, so it opens like any other download.
 
 Prefer to build it yourself? `open Shepherdr.xcodeproj` and hit **⌘R**. More in [DEVELOPMENT](docs/DEVELOPMENT.md).
 

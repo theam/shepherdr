@@ -5,14 +5,8 @@ Requires an Apple Silicon Mac (M1 or later) running macOS 14 Sonoma or later.
 
 1. Drag Shepherdr.app to Applications.
 2. Eject the Shepherdr disk image, then open Shepherdr from Applications.
-3. This release uses an ad hoc signature and is not notarized by Apple.
-   If macOS blocks it because the developer cannot be verified, and you trust
-   this download, open System Settings > Privacy & Security > Open Anyway
-   after the first launch attempt. Confirm Open for Shepherdr.
-   Managed Macs may require administrator approval.
-
-Apple's instructions: https://support.apple.com/en-us/102445
-Do not disable Gatekeeper or remove quarantine globally.
+   Shepherdr is signed with The Agile Monkeys' Developer ID and notarized by
+   Apple, so macOS only asks you to confirm opening an app from the internet.
 
 Required: install and start Herdr separately: https://herdr.dev/docs/
 Shepherdr reads your existing Herdr installation and saved machine profiles.

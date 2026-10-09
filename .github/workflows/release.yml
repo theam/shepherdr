@@ -21,14 +21,19 @@ concurrency:
 jobs:
   release:
     runs-on: macos-15
-    timeout-minutes: 30
+    # Notarization waits for Apple twice: once for the app, once for the disk image.
+    timeout-minutes: 60
+    # The signing secrets live in this environment, which only tags and main may deploy to.
+    environment: release
     permissions:
       contents: write
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - name: Validate version and runner
+      - name: Validate version, runner and signing setup
         shell: bash
+        env:
+          SIGNING_CONFIGURED: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' && secrets.DEVELOPER_ID_P12_PASSWORD != '' && secrets.NOTARY_APPLE_ID != '' && secrets.NOTARY_PASSWORD != '' && vars.APPLE_TEAM_ID != '' }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
@@ -36,6 +41,10 @@ jobs:
             exit 1
           }
           [[ "$(uname -m)" == arm64 ]]
+          [[ "$SIGNING_CONFIGURED" == true ]] || {
+            echo 'Developer ID signing is not configured: see docs/RELEASING.md.' >&2
+            exit 1
+          }
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -48,8 +57,56 @@ jobs:
             -configuration Debug -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/tests ARCHS=arm64 CODE_SIGNING_ALLOWED=NO test
 
-      - name: Build and verify release packages
+      - name: Import Developer ID certificate and notary credentials
+        shell: bash
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 7200 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          base64 --decode <<< "$DEVELOPER_ID_P12_BASE64" > "$RUNNER_TEMP/developer-id.p12"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -f pkcs12 \
+            -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          # Sign with the certificate's hash, so another identity with a similar name can never be picked.
+          identity="$(security find-identity -v -p codesigning "$keychain" |
+            awk -v team="($APPLE_TEAM_ID)\"" '!found && /"Developer ID Application: / && index($0, team) { print $2; found = 1 }')"
+          [[ -n "$identity" ]] || {
+            echo "The certificate is not a valid Developer ID Application identity of team $APPLE_TEAM_ID." >&2
+            exit 1
+          }
+          # Apple checks the credentials here, before the build.
+          xcrun notarytool store-credentials shepherdr-notary --keychain "$keychain" \
+            --apple-id "$NOTARY_APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$NOTARY_PASSWORD"
+          {
+            echo "SHEPHERDR_SIGN_IDENTITY=$identity"
+            echo "SHEPHERDR_TEAM_ID=$APPLE_TEAM_ID"
+            echo "SHEPHERDR_NOTARY_PROFILE=shepherdr-notary"
+            echo "SHEPHERDR_NOTARY_KEYCHAIN=$keychain"
+          } >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize and verify release packages
         run: bash scripts/package-release.sh "$RELEASE_TAG"
+
+      - name: Remove signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${SHEPHERDR_NOTARY_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$SHEPHERDR_NOTARY_KEYCHAIN"
+          fi
 
       - name: Publish GitHub release
         env:
