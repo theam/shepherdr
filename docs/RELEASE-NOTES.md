@@ -1,12 +1,15 @@
 Native macOS console for herding your coding agents across your Herdr machines: one prioritized queue, the real terminal of every session, a browser per session, and a notification when it's your turn.
 
-### What's new in 0.8.3
+### What's new in 0.8.4
 
-- **Start a new project from New Session.** When the folder doesn't exist, New Session offers to make it a new project: **NEW PROJECT** creates the folder, runs `git init` in it and opens the session, on this Mac or on any of your machines.
+- **Opens like any other download.** Shepherdr is now signed with The Agile Monkeys' Developer ID and notarized by Apple: no more **Open Anyway** in **Privacy & Security**.
+- **See which agent works in each session.** Each session shows its agent by the mark its own interface uses: ✻ Claude Code, >_ Codex, ✦ Gemini CLI, and ◇ for the rest. It's in the queue, the session's header and the overview cards.
+- **Pull request and issue states in Resources.** Merged pull requests and issues closed as completed turn lilac, as on GitHub; pull requests closed without merging and issues closed as not planned dim. The sidebar's pull request number turns lilac once the session's pull requests land.
+- **More folders in New Session.** Its shortcuts also offer the folders of shells still waiting for an agent, and **File → New Session in Same Folder…** (**⇧⌘N**) starts one beside the session on screen.
 
 ### Fixed
 
-- New sessions on other machines opened in the home folder when their folder was missing or started with `~`. Shepherdr now checks the folder over SSH first, where `~` means that machine's home.
+- Renaming a session could do nothing: the new name was lost as the dialog closed.
 
 ### Download and install
 
