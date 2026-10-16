@@ -26,6 +26,7 @@ A bilingual (English/Spanish) quick guide with the same content comes with the a
 - **Agents that coordinate:** Shepherdr installs a small `shepherdr` command and a skill for Claude Code and Codex on each machine, Linux included. An agent asked to "start a session on buildbox" starts it there, nested under its own session, which goes on hold until the new one finishes. The new session hands its result back with `shepherdr handoff`, and Shepherdr delivers it as a prompt once the coordinator is free. Machines never connect to your Mac: Shepherdr collects what agents leave for it.
 - **Create and close sessions:** **⌘N** creates a Herdr workspace with a shell in a folder; start Claude Code, Codex or any other supported agent in it and it joins the queue. Create one in a group with its **+**, or next to a session with **New Session in Same Folder…** (**⇧⌘N**). **Close Session…** in a session's context menu ends its pane after confirmation. **Rename…** renames its Herdr workspace.
 - **Overview:** how many sessions need you, are working, done or idle, and a card per machine with its sessions and its processor, memory and disk use. Click states and machines to list the sessions in any combination of them. Plain shell panes are listed separately.
+- **GitHub inbox:** the overview's **GITHUB** tab lists what the repositories you follow ask of you: pull requests awaiting your review, issues assigned to you and your own open pull requests, with their checks and the pull requests linked to each issue. **SUGGEST ORDER** lists the pull requests in the order to take them on.
 - **Lid status:** the foot of the sidebar tells you whether it's safe to close the lid. While agents work on this Mac it warns you not to, since sleep would pause them; remote sessions don't count, they keep going.
 - **Machines** in **Settings → Machines** (⌘,): add SSH machines, disable them to stop polling, or remove them from Herdr's catalog.
 - Concurrent queries, independent connection states, and last-known data marked stale after failure.
@@ -48,7 +49,7 @@ Install and start Herdr separately, then open Shepherdr. The app reads your exis
 - A locally installed `herdr` supporting `machine list --json` and `api snapshot`.
 - For remote machines, a local Herdr build with the documented global `--machine` option, plus compatible remote installations and an already-running server. Herdr CLI 0.9.3 provides that option; 0.9.0 does not. Shepherdr shows an incompatibility message on older CLIs.
 - For interactive terminals, the Herdr installation on the target machine must support `terminal session observe` and `terminal session control`. Verified with CLI/server 0.9.3. Remote terminals require a Unix-like host, OpenSSH access and an existing saved profile.
-- Recommended: the [GitHub CLI](https://cli.github.com) on this Mac, signed in with `gh auth login`. With it, Shepherdr confirms GitHub pull requests and issues, private ones included, fetches their titles, and watches pull requests' CI checks. Without it, resources are checked through the session browsers, which see private repositories only while you're signed in there, and checks aren't watched.
+- Recommended: the [GitHub CLI](https://cli.github.com) on this Mac, signed in with `gh auth login`. With it, Shepherdr confirms GitHub pull requests and issues, private ones included, fetches their titles, watches pull requests' CI checks and fills the GitHub inbox. Without it, resources are checked through the session browsers, which see private repositories only while you're signed in there, checks aren't watched and the inbox stays empty.
 
 Local integration has been verified with CLI 0.9.3 querying an existing, compatible 0.9.0 server. Updating the CLI does not require replacing a compatible running server.
 
@@ -78,11 +79,33 @@ Local executable discovery does not source shell startup files. Inherited `HERDR
 
 ## Overview
 
-**⌘0** shows the overview. Its first row counts the sessions that need you, are working, are done or are idle. The second has a card per machine with how many sessions it has and how busy it is, to help choose where the next agent goes: processor use over one second, memory in use, and the disk holding the home folder, amber from 70% and red from 90%.
+**⌘0** shows the overview. Its first row counts the sessions that need you, are working, are done or are idle. The second has a card per machine with how many sessions it has and how busy it is, to help choose where the next agent goes: processor use over one second, memory in use, and the disk holding the home folder, amber from 70% and red from 90%. Below, **SESSIONS** shows a card per session in priority order and **GITHUB** your [GitHub inbox](#github-inbox).
 
 Click a state or a machine to show only its sessions, and click more to add them: the sessions that need you on two machines, say. Each row counts what the other row lets through. Click a card again to drop it, or **SHOW ALL** to see every session again. The sidebar's queue is never filtered. A machine that isn't answering shows its sessions' last known state, so they are left out once you choose a state.
 
 Herdr does not report machine load, so Shepherdr measures it every 15 seconds while the overview is on screen: on this Mac directly, and on other machines with a short `sh` script over SSH, with the same non-interactive settings as remote terminals. The script uses `/proc` on Linux, `iostat` and `vm_stat` on macOS, and `df` on both. Memory in use counts what `free` and Activity Monitor count. A machine that stops answering keeps its last reading for a minute.
+
+### GitHub inbox
+
+The overview's **GITHUB** tab shows what the GitHub repositories you follow ask of you. Shepherdr asks GitHub through its CLI, so install the [GitHub CLI](https://cli.github.com) and sign in with `gh auth login`; the inbox says so when it can't.
+
+Press **REPOS…** to choose the repositories: type `owner/repo`, or paste a github.com link or a remote. **PAUSE** keeps one on the list without asking GitHub about it, and **REMOVE** stops following it and forgets which of its items you saw. The list is kept on this Mac.
+
+Three columns show eight items each, and **more** the rest: **REVIEW REQUESTED** (◇), open pull requests awaiting your review; **ASSIGNED ISSUES** (◉), open issues assigned to you; and **YOUR PULL REQUESTS** (⇄). Pull requests show whether they're drafts or what reviewers decided, and their checks: ● running, ✓ passed, ✗ failed. Issues show the pull requests linked to them, connected by hand or set to close them when merged, such as **⇄ PR #12**, dimmed once none is open. A dot marks what is new or changed since you opened it. Click an item to open it in your default browser; its context menu copies the link or marks it seen or unseen.
+
+The inbox asks GitHub when the overview appears and its last answer is more than five minutes old, right away when you follow, pause or remove a repository, and when you press **SYNC**. A failed sync keeps the last answer on screen, with a warning.
+
+**Suggested order.** Tick **SUGGEST ORDER** to replace the pull request columns with one numbered list. Each pull request says what to do and why, such as `approved · checks passed · +12 −3 · 2 files · open 3d`, in this order:
+
+1. **MERGE**: yours, approved, with no conflicts and checks that aren't running or failing.
+2. **REVIEW**: others' waiting on your review.
+3. **ADDRESS**: yours, with changes requested.
+4. **RESOLVE**: yours, in conflict with the branch it merges into.
+5. **FIX**: yours, with failed checks.
+6. **FINISH**: your drafts.
+7. **WAIT**: yours, with nothing to do yet: waiting for a review, for its checks or for the pull request it's stacked on.
+
+Within each step, ready pull requests come before those with running or failed checks or conflicts, smaller before larger, and older before newer. A pull request stacked on another listed one, merging into its branch in the same repository, goes right after it and isn't suggested for merging first. Assigned issues keep their column. Shepherdr remembers whether the box is ticked.
 
 ## Commands left running
 

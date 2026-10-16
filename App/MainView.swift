@@ -91,6 +91,7 @@ struct MainView: View {
         .sheet(item: $model.waitPicking) { picking in
             WaitForPicker(id: picking.session, model: model) { model.waitPicking = nil }
         }
+        .sheet(isPresented: $model.showsGitHubRepositoriesSheet) { GitHubRepositoriesSheet(model: model) }
         .alert("Download the speech model?", isPresented: $model.asksToDownloadSpeechModel) {
             Button("Download") { model.acceptSpeechModelDownload() }
             Button("Cancel", role: .cancel) {}

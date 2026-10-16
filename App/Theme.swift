@@ -401,6 +401,23 @@ struct ConsoleButtonStyle: ButtonStyle {
     }
 }
 
+/// A console checkbox: `[✓] LABEL` lit when on, `[ ] LABEL` dimmed when off.
+struct ConsoleCheckboxStyle: ToggleStyle {
+    var tint: Color = Theme.phosphor
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(spacing: 5) {
+                Text(configuration.isOn ? "[✓]" : "[ ]")
+                configuration.label
+            }
+        }
+        .buttonStyle(ConsoleButtonStyle(tint: configuration.isOn ? tint : Theme.dim))
+        .accessibilityAddTraits(.isToggle)
+        .accessibilityValue(configuration.isOn ? "On" : "Off")
+    }
+}
+
 struct ConnectionDot: View {
     let state: ConnectionState
     var body: some View {

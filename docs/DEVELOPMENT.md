@@ -68,11 +68,12 @@ Use **Settings → Machines** for failure details. A malformed response is **Inc
 App/                              SwiftUI presentation: queue sidebar, work area, prompt editor, browser, settings, theme
   Compass.swift                   Compass: its agent, schedule, runs, page, actions and backup, and the page's bridge
   CompassViews.swift              The mode tabs, Compass's column and work area, and its welcome screen
+  GitHubInbox*.swift              The overview's GitHub inbox: its sync with GitHub, its columns and suggested order
 Sources/ShepherdrCore/
   Transport/                      CLI adapters, executable discovery, bounded process/stream transports, agent tools and mailbox, Compass's folder and Git
   DTO/                            JSON wire types, validation and domain mapping
-  Domain/                         Machine, Workspace, Agent, lifecycle and failure models, project gathering, letters and machine lists, Compass's schedule, settings and actions
-  Store/                          MainActor cluster state, local priorities, groups, project headings and holds, terminal connections, agent tools and mail
+  Domain/                         Machine, Workspace, Agent, lifecycle and failure models, project gathering, letters and machine lists, Compass's schedule, settings and actions, the GitHub inbox and its suggested order
+  Store/                          MainActor cluster state, local priorities, groups, project headings and holds, terminal connections, agent tools and mail, the GitHub inbox's repositories
   Resources/AgentTools/           The shepherdr command and skill installed on each machine
   Resources/Compass/              Compass's contract, page template, starter prompt and permissions
 Sources/ShepherdrTerminalUI/       Embeddable SwiftTerm AppKit terminal surface, palette and link handling
@@ -87,6 +88,8 @@ scripts/make-header-masks.py       Prepares the header's masks and cleaned art (
 ```
 
 Compass's pure parts are in Core and tested there: `CompassSchedule` (run times and missed runs, with fixed clocks), `CompassConfig` (lenient, since agents edit it), `CompassAction` (the page's buttons), `CompassFolder` (the kit and the files by owner) and `CompassRepository` (Git, tested with a real Git and a bare remote when Git is installed). `CompassController` in the app follows the agent through each run.
+
+The GitHub inbox asks for everything in one GraphQL query through `gh api graphql`, with the searches as variables (`GitHubLookup.inboxQuery`), and parses the answer in Core (`GitHubLookup.parseInbox`). `GitHubInboxStore` keeps the followed repositories and what you've seen in user defaults, and `PullRequestOrder` suggests the order for its pull requests from their review state, checks, conflicts, size, age and stacking, with fixed clocks in its tests.
 
 `HerdrClient` exposes domain snapshots and the machine catalog. `HerdrTerminalClient` exposes live terminal connections, frames and input. `CLIHerdrClient` implements both; views never execute commands or decode JSON. Agent identity combines the machine profile and terminal ID, so identical pane IDs and names on different machines remain distinct. Native Unix-socket transport and event subscriptions can replace the CLI behind these boundaries.
 

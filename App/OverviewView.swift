@@ -4,8 +4,11 @@ import ShepherdrCore
 
 /// The home screen: cluster pulse at a glance, then every session as a card in priority order.
 /// Choosing states and machines narrows the cards to any combination of them.
+private enum HomeTab { case sessions, github }
+
 struct OverviewView: View {
     @Bindable var model: AppModel
+    @ViewState<HomeTab> private var tab = .sessions
     private var cluster: ClusterStore { model.cluster }
     private var machines: [MachineState] { cluster.machines.filter(\.machine.isEnabled) }
 
@@ -25,7 +28,11 @@ struct OverviewView: View {
                     NoticeView(title: "\(state.machine.name): \(state.connection.title)" + (state.isStale ? " · showing last known data" : ""),
                                message: state.failure?.message ?? "", detail: state.failure?.detail)
                 }
-                sessions
+                tabSelector
+                switch tab {
+                case .sessions: sessions
+                case .github: GitHubInboxSection(model: model)
+                }
             }
             .padding(.horizontal, 28).padding(.top, 40).padding(.bottom, 28)
             .frame(maxWidth: 1_100, alignment: .leading)
@@ -34,6 +41,18 @@ struct OverviewView: View {
         .background(Theme.background)
         .task { await model.usageMonitor.monitor { [cluster] in cluster.machines.map(\.machine).filter(\.isEnabled) } }
         .onChange(of: machines.map(\.id), initial: true) { model.sessionFilter.keep(machines: Set(machines.map(\.id))) }
+    }
+
+    private var tabSelector: some View {
+        HStack(spacing: 8) {
+            tabButton("SESSIONS", tab: .sessions)
+            tabButton("GITHUB", tab: .github)
+        }
+    }
+
+    private func tabButton(_ title: String, tab target: HomeTab) -> some View {
+        Button(title) { tab = target }
+            .buttonStyle(ConsoleButtonStyle(tint: Theme.phosphor, prominent: tab == target))
     }
 
     private var hero: some View {
@@ -81,26 +100,28 @@ struct OverviewView: View {
 
     @ViewBuilder private var sessions: some View {
         let rows = model.overviewRows
-        HStack(spacing: 10) {
-            ConsoleHeader(title: "Sessions by priority",
-                          trailing: model.sessionFilter.isEmpty ? (rows.isEmpty ? nil : "⌘1–⌘9 to jump")
-                                                                : "\(rows.count) of \(model.matchingRows.count)")
-            if !model.sessionFilter.isEmpty {
-                Button("SHOW ALL") { model.sessionFilter = SessionFilter() }
-                    .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
-                    .help("Stop filtering by state and machine")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ConsoleHeader(title: "Sessions by priority",
+                              trailing: model.sessionFilter.isEmpty ? (rows.isEmpty ? nil : "⌘1–⌘9 to jump")
+                                                                    : "\(rows.count) of \(model.matchingRows.count)")
+                if !model.sessionFilter.isEmpty {
+                    Button("SHOW ALL") { model.sessionFilter = SessionFilter() }
+                        .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
+                        .help("Stop filtering by state and machine")
+                }
             }
-        }
-        if rows.isEmpty {
-            Text(emptyMessage).font(Theme.mono(12)).foregroundStyle(Theme.dim)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
-                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 6))
-        } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
-                ForEach(rows) { row in
-                    SessionCard(row: row, showsMachine: model.showsMachineNames, background: model.backgroundCommands(of: row)) {
-                        model.open(row.id)
+            if rows.isEmpty {
+                Text(emptyMessage).font(Theme.mono(12)).foregroundStyle(Theme.dim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 6))
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
+                    ForEach(rows) { row in
+                        SessionCard(row: row, showsMachine: model.showsMachineNames, background: model.backgroundCommands(of: row)) {
+                            model.open(row.id)
+                        }
                     }
                 }
             }
