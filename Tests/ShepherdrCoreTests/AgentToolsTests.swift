@@ -125,7 +125,7 @@ struct AgentToolsTests {
     /// fingerprint here: after bumping it, add the new one this test prints.
     @Test func changingTheToolsTakesANewVersion() throws {
         // 3, with `shepherdr run`, only reached test builds; 4 replaces it on their machines.
-        let fingerprints = [1: "421ecfaa5c879c75", 2: "6e89f6a3e43a9be2", 4: "7ced138f11461d6a"]
+        let fingerprints = [1: "421ecfaa5c879c75", 2: "6e89f6a3e43a9be2", 4: "7ced138f11461d6a", 5: "67acf304fec8b032"]
         let kit = try AgentTools.bundled()
         var hash = SHA256()
         for path in kit.files.keys.sorted() where path != "VERSION" {

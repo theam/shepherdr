@@ -13,7 +13,8 @@ public struct MailItem: Identifiable, Codable, Equatable, Sendable {
         case spawnRequest
         /// A page a session on another machine suggests opening.
         case openPage
-        /// A session another machine's agent asks to close.
+        /// A session an agent asks to close, its own or another: it closes only when the user
+        /// presses CLOSE.
         case close
     }
 
@@ -99,9 +100,6 @@ public enum MailAction: Equatable, Sendable {
     case pin(Agent.ID, SessionResource)
     case open(Agent.ID, URL)
     case notify(Agent.ID?, String)
-    /// Ends a session, as Close Session does. `asked` is the session that asked, when it isn't the
-    /// one closing; `whenFree` waits for its agent to finish its turn first.
-    case close(Agent.ID, asked: Agent.ID?, whenFree: Bool)
     /// Something in the letter couldn't be done, to show on the sender if there is one.
     case problem(Agent.ID?, String)
 }
@@ -249,11 +247,14 @@ public enum MailPlanner {
         case .close(let names, let force):
             guard let sender else { return [needsSender("close a session")] }
             let protected = "Compass's own session can't be closed this way."
-            // Its own session: once its agent has finished the turn it asked in, unless forced. A
-            // shell, such as a script's, has no turn to finish.
-            func closeSelf() -> MailAction {
+            // Ending a session is always the user's call: each one asked for waits for their CLOSE,
+            // whichever machine asked and however trusted it is.
+            func ask(_ id: Agent.ID, index: Int, name: String?) -> MailAction {
+                .keep(item(.close, index: index, recipient: id, status: .needsApproval, addressedTo: name))
+            }
+            func closeSelf(index: Int = 0, name: String? = nil) -> MailAction {
                 if context.protected.contains(sender) { return .problem(sender, protected) }
-                return .close(sender, asked: nil, whenFree: !force && context.rows.contains { $0.id == sender })
+                return ask(sender, index: index, name: name)
             }
             guard !names.isEmpty else { return [closeSelf()] }
             return names.enumerated().map { index, name in
@@ -264,7 +265,7 @@ public enum MailPlanner {
                 case .missing: return .problem(sender, "No session is named \(name), so nothing was closed.")
                 case .ambiguous: return .problem(sender, "Several sessions are named \(name). Add @machine to pick one.")
                 }
-                if id == sender { return closeSelf() }
+                if id == sender { return closeSelf(index: index, name: name) }
                 if context.protected.contains(id) { return .problem(sender, protected) }
                 guard let row = context.rows.first(where: { $0.id == id }) else { return .problem(sender, "No session is named \(name).") }
                 if row.isStale { return .problem(sender, "\(row.workspace) is on a machine that isn't answering, so it wasn't closed.") }
@@ -272,11 +273,7 @@ public enum MailPlanner {
                     let doing = row.agent.state == .working ? "is working" : "needs the user"
                     return .problem(sender, "\(row.workspace) \(doing), so it wasn't closed. Close it with --force only if the user asked for that.")
                 }
-                // Ending an agent on a different machine is the user's call, as its prompts are.
-                if !origin.isLocal, !context.isTrusted, id.machineID != origin.id {
-                    return .keep(item(.close, index: index, recipient: id, status: .needsApproval, addressedTo: name))
-                }
-                return .close(id, asked: sender, whenFree: false)
+                return ask(id, index: index, name: name)
             }
         }
     }

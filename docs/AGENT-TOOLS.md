@@ -87,7 +87,7 @@ A letter is `letter.json`, an optional `message.md`, and attachments in `files/`
 | `pin` | `pin` | `url`, `title` | Adds the link to the sender's resources |
 | `open` | `open` | `url` | Opens it in the sender's browser |
 | `notify` | `notify` | `body` | Posts a notification |
-| `close` | `close` | `sessions`, `force` | Closes those sessions with `pane close`, as **Close Session** does, or the sender's own when `sessions` is empty |
+| `close` | `close` | `sessions`, `force` | Asks the user to close those sessions, or the sender's own when `sessions` is empty; **CLOSE** closes them with `pane close`, as **Close Session** does |
 
 `child.machine` is `here` or `profile:<Herdr profile ID>`; the latter only counts in the Mac's own letters. Names in `to` and `sessions` match a session's Herdr agent name, then its workspace name, ignoring case, preferring the sender's machine; `name@machine` picks the machine.
 
@@ -113,9 +113,11 @@ Only regular files (no symbolic links) with the names the command writes cross. 
 
 `MailPlanner.plan` turns a letter into actions; `Courier` in the app carries them out. Handoffs and pending prompts are delivered with `herdr [--machine] agent prompt <pane> <text>` once the recipient's agent is idle or done, one at a time, at least 20 seconds apart per session. Herdr refuses while the agent shows a question or isn't ready, and Shepherdr tries again on a later refresh. For a recipient on another machine, attachments are first copied to its `~/.cache/shepherdr/drops`, as dropped files are.
 
-Letters from the Mac apply on their own. From another machine, anything whose text would reach a session on a different machine, requests for sessions, pages to open, and closing a session on a different machine wait for the user, unless **Trust its letters** is on for that machine. A handoff between sessions on the same remote machine crosses nothing and is delivered directly.
+Letters from the Mac apply on their own, except `close`. From another machine, anything whose text would reach a session on a different machine, requests for sessions and pages to open wait for the user, unless **Trust its letters** is on for that machine. Every `close`, from any machine, trusted or not, waits for the user's **CLOSE**. A handoff between sessions on the same remote machine crosses nothing and is delivered directly.
 
-A `close` letter never closes Compass's own agent, or a session on a machine that isn't answering. Without `force`, it doesn't close another session whose agent is working or needs the user: the sender's session shows why instead. The sender's own session, which is working since its agent ran the command, closes once its agent is idle or done, so the turn finishes; with `force`, or for a shell with no agent, right away. The session that asked another to close is told it closed. Waiting for a turn to end lives in memory only.
+A `close` letter never asks about Compass's own agent, or a session on a machine that isn't answering. Without `force`, it doesn't ask about another session whose agent is working or needs the user: the sender's session shows why instead. Each session it names becomes a `close` item that needs approval, one per session. Once the user presses **CLOSE**, the sender's own session closes when its agent is idle or done, so the turn finishes, or right away for a shell with no agent; another session closes right away, and the session that asked is told it closed. Waiting for a turn to end lives in memory only.
+
+The skill keeps handoffs and closes for when the user asks: agents don't hand off or close on their own, don't ask the sessions they start to, and when the user asks for both, hand off first. Starting sessions always fans out: `spawn` puts its caller on hold for the new session, and the skill keeps `--no-wait` for when the user asks for a session that isn't linked.
 
 **HANDOFF AND CLOSE** adds no letter kind. Once the session's agent is idle or done, `Courier` types `HandoffClose.prompt` into it with the same `agent prompt`, asking it to run `shepherdr handoff` without `--to`. `HandoffClose.outcome(of:)` then reads the actions planned for each letter collected. If a handoff from that session was filed for a session that waited for it, queued or waiting for approval, the message and files are on the Mac: Shepherdr closes the session with `pane close`, as **Close Session** does. A handoff filed for anyone else keeps the session open. So does a failed request, or no handoff within 15 minutes of asking while the agent isn't working. The pending close lives in memory only.
 
@@ -167,7 +169,7 @@ The page is a local file loaded with a `WKWebViewConfiguration` of its own. `Com
 
 | `data-shepherdr` | Fields | Shepherdr |
 | --- | --- | --- |
-| `spawn` | `machine`, `cwd`, `kind` (an agent kind or `shell`), `name` (`[a-z][a-z0-9_-]{0,31}`), `prompt` (256 KB at most) | Opens New Session with them filled in. The first prompt waits in the mail like a spawned session's, in `~/.shepherdr/inbox/compass/<id>/message.md`, deleted once delivered or discarded. With **Hand its result back to Compass**, Compass's agent waits for the session, so its handoff comes back. The item records it under `started` in the day's marks. |
+| `spawn` | `machine`, `cwd`, `kind` (an agent kind or `shell`), `name` (`[a-z][a-z0-9_-]{0,31}`), `prompt` (256 KB at most) | Opens New Session with them filled in. The first prompt waits in the mail like a spawned session's, in `~/.shepherdr/inbox/compass/<id>/message.md`, deleted once delivered or discarded. With **Compass waits for it**, ticked by default, Compass's agent waits for the session, so a handoff the user asks it for comes back to Compass. The item records it under `started` in the day's marks. |
 | `ask` | `prompt` | Puts the text in Compass's prompt editor. |
 | `session` | `session`, `name` or `name@machine` | Switches to Agents and opens it. |
 | `prompt` | `session`, `prompt` | Opens it with the text in its prompt editor. |

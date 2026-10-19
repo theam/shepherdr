@@ -47,7 +47,7 @@ struct NewSessionSheet: View {
     /// An agent to start and its first prompt, when something asked for them, such as a Compass page.
     @ViewState<String?> private var agentKind: String?
     @ViewState<String> private var prompt: String
-    @ViewState<Bool> private var handsBack: Bool
+    @ViewState<Bool> private var compassWaits: Bool
     @ViewState<QueueDrop?> private var placement: QueueDrop?
     @ViewState<CGFloat> private var promptHeight: CGFloat = 90
 
@@ -67,7 +67,7 @@ struct NewSessionSheet: View {
         _name = ViewState(initialValue: draft.name ?? "")
         _agentKind = ViewState(initialValue: draft.agentKind)
         _prompt = ViewState(initialValue: draft.prompt ?? "")
-        _handsBack = ViewState(initialValue: draft.compass?.handsBack ?? false)
+        _compassWaits = ViewState(initialValue: draft.compass?.compassWaits ?? false)
         _placement = ViewState(initialValue: draft.placement)
     }
 
@@ -272,9 +272,9 @@ struct NewSessionSheet: View {
                 .labelsHidden()
             }
             if agentKind != nil {
-                Toggle("Hand its result back to Compass", isOn: $handsBack)
+                Toggle("Compass waits for it", isOn: $compassWaits)
                     .font(Theme.mono(11)).toggleStyle(.checkbox)
-                    .help("Compass waits for it, and its handoff comes back to the Compass agent, which updates the page.")
+                    .help("Compass's session goes on hold for it and lists it under itself. When you ask it for a handoff, the result goes to Compass's agent, which updates the page.")
             }
         }
     }
@@ -536,12 +536,9 @@ struct NewSessionSheet: View {
     private func open(_ path: String, worktree: NewSessionRequest.Worktree?, pins: [URL] = [], on machine: MachineState) {
         let kind = startsAgent ? agentKind : nil
         let request = NewSessionRequest(directory: path, name: resolvedName, agentKind: kind, worktree: worktree)
-        var first = kind == nil ? nil : prompt.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let first = kind == nil ? nil : prompt.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         var from = draft.compass
-        from?.handsBack = handsBack && kind != nil
-        if let text = first, from?.handsBack == true, !text.contains("shepherdr handoff") {
-            first = text + "\n\nWhen you finish, hand the result back with ~/.shepherdr/bin/shepherdr handoff."
-        }
+        from?.compassWaits = compassWaits && kind != nil
         Task {
             failure = await model.createSession(request, onMachine: machine.id, placement: startsAgent ? placement : draft.placement,
                                                 pins: pins, prompt: first, compass: from)

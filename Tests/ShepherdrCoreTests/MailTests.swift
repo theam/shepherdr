@@ -189,42 +189,44 @@ struct ClosePlanTests {
         return MailPlanner.plan(try letter("{\(from),\"kind\":\"close\",\(json)}"), folder: "/x", context: context)
     }
 
-    @Test func aSessionClosesItselfOnceItsTurnEnds() throws {
-        // Its agent is working: it ran the command in this turn.
-        #expect(try plan(#""sessions":[],"force":false"#, from: box) == [.close(fixer.id, asked: nil, whenFree: true)])
-        #expect(try plan(#""sessions":[],"force":true"#, from: box) == [.close(fixer.id, asked: nil, whenFree: false)])
-        // Its own name means itself too.
-        #expect(try plan(#""sessions":["fixer"],"force":false"#, from: box) == [.close(fixer.id, asked: nil, whenFree: true)])
-        // A shell, such as a script's, has no turn to wait for.
-        let shell = Agent.ID(machineID: lab.id, terminalID: "term_fixer")
-        #expect(try plan(#""sessions":[],"force":false"#, from: lab) == [.close(shell, asked: nil, whenFree: false)])
+    /// The close requests a plan keeps for the user.
+    private func requests(_ actions: [MailAction]) -> [MailItem] {
+        actions.compactMap { if case .keep(let item) = $0, item.kind == .close, item.status == .needsApproval { item } else { nil } }
     }
 
-    @Test func otherSessionsCloseUnlessTheyWorkOrNeedTheUser() throws {
-        #expect(try plan(#""sessions":["reviewer"],"force":false"#, from: box) == [.close(reviewer.id, asked: fixer.id, whenFree: false)])
+    @Test func aSessionAsksTheUserToCloseItself() throws {
+        for json in [#""sessions":[],"force":false"#, #""sessions":[],"force":true"#, #""sessions":["fixer"],"force":false"#] {
+            let asked = requests(try plan(json, from: box))
+            #expect(asked.map(\.recipient) == [fixer.id] && asked.first?.sender == fixer.id, "\(json)")
+        }
+        // A shell, such as a script's, too.
+        let shell = Agent.ID(machineID: lab.id, terminalID: "term_fixer")
+        #expect(requests(try plan(#""sessions":[],"force":false"#, from: lab)).map(\.recipient) == [shell])
+    }
+
+    @Test func otherSessionsAreAskedAboutUnlessTheyWorkOrNeedTheUser() throws {
+        let asked = requests(try plan(#""sessions":["reviewer"],"force":false"#, from: box))
+        #expect(asked.map(\.recipient) == [reviewer.id] && asked.first?.sender == fixer.id && asked.first?.addressedTo == "reviewer")
         let refused = try plan(#""sessions":["busy","asking","ghost"],"force":false"#, from: box)
         #expect(refused.count == 3)
         for (action, words) in zip(refused, ["busy is working", "asking needs the user", "No session is named ghost"]) {
             if case .problem(let who, let text) = action { #expect(who == fixer.id && text.contains(words), "\(text)") }
             else { Issue.record("expected a problem, got \(action)") }
         }
-        #expect(try plan(#""sessions":["busy","asking"],"force":true"#, from: box) ==
-                [.close(busy.id, asked: fixer.id, whenFree: false), .close(asking.id, asked: fixer.id, whenFree: false)])
+        let forced = requests(try plan(#""sessions":["busy","asking"],"force":true"#, from: box))
+        #expect(forced.map(\.recipient) == [busy.id, asking.id])
+        #expect(Set(forced.map(\.id)).count == 2)
     }
 
-    @Test func closingASessionElsewhereIsTheUsersCall() throws {
-        // From buildbox, a session on this Mac waits for approval unless buildbox is trusted.
-        let asked = try plan(#""sessions":["planner"],"force":false"#, from: box)
-        guard case .keep(let item) = asked.first else {
-            Issue.record("expected an item, got \(asked)")
-            return
+    @Test func closingIsAlwaysTheUsersCall() throws {
+        // Whichever machine asks, however trusted, this Mac included: nothing closes on its own.
+        for trusted in [false, true] {
+            let asked = requests(try plan(#""sessions":["planner"],"force":false"#, from: box, trusted: trusted))
+            #expect(asked.map(\.recipient) == [planner.id] && asked.first?.sender == fixer.id)
         }
-        #expect(item.kind == .close && item.status == .needsApproval && item.recipient == planner.id && item.sender == fixer.id
-                && item.addressedTo == "planner")
-        #expect(try plan(#""sessions":["planner"],"force":false"#, from: box, trusted: true) == [.close(planner.id, asked: fixer.id, whenFree: false)])
-        // This Mac's letters apply on their own.
         let sender = Agent.ID(machineID: "local", terminalID: "term_fixer")
-        #expect(try plan(#""sessions":["reviewer@buildbox"],"force":false"#, from: .local) == [.close(reviewer.id, asked: sender, whenFree: false)])
+        let fromHere = requests(try plan(#""sessions":["reviewer@buildbox"],"force":false"#, from: .local))
+        #expect(fromHere.map(\.recipient) == [reviewer.id] && fromHere.first?.sender == sender)
     }
 
     @Test func compassAndLettersWithoutASenderCloseNothing() throws {

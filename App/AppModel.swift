@@ -230,12 +230,12 @@ final class SessionWorkspace {
 /// What the New Session sheet starts from: a folder and machine to prefill, and where the
 /// session takes its place in the queue once Herdr reports its agent.
 struct NewSessionDraft: Identifiable {
-    /// A session a Compass page asked for: the day and item it came from, and whether its
-    /// handoff goes back to Compass.
+    /// A session a Compass page asked for: the day and item it came from, and whether Compass's
+    /// session waits for it.
     struct FromCompass: Equatable {
         let day: String
         let item: String?
-        var handsBack: Bool
+        var compassWaits: Bool
     }
 
     let id = UUID()

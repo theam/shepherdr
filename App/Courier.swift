@@ -321,12 +321,6 @@ final class Courier {
                 model.workspace(for: session).browser.open(url)
             case .notify(let session, let text):
                 model.notifier.letterNotice(text, from: session, machine: name(of: machine.id))
-            case .close(let session, let asker, true) where asker == nil:
-                closingWhenFree.insert(session)
-                model.sessionNotices[session] = "Its agent asked to close this session: Shepherdr closes it once the agent finishes this turn."
-                closeFinishedSessions()
-            case .close(let session, let asker, _):
-                close(session, asked: asker)
             case .problem(let session?, let text):
                 model.sessionNotices[session] = text
             case .problem(nil, let text):
@@ -547,7 +541,16 @@ final class Courier {
             mail.remove(item.id)
         case .close:
             mail.remove(item.id)
-            if let session = item.recipient { close(session, asked: item.sender) }
+            guard let model, let session = item.recipient else { return }
+            // A session that asked to close itself ends once its agent has finished its turn; a
+            // shell has no turn to finish.
+            if session == item.sender, let row = model.row(for: session), row.agent.state == .working || row.agent.state == .blocked {
+                closingWhenFree.insert(session)
+                model.sessionNotices[session] = "Shepherdr closes this session once its agent finishes this turn."
+                closeFinishedSessions()
+            } else {
+                close(session, asked: item.sender)
+            }
         }
     }
 
