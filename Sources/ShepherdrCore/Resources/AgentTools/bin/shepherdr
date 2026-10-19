@@ -559,8 +559,9 @@ cmd_resume() {
 }
 
 # Closing ends a session's pane and its agent, so the skill tells agents to do it only when the
-# user asks. Shepherdr closes the caller once its turn ends, and refuses to close a session that is
-# working or waiting for the user unless --force.
+# user asks, and Shepherdr closes nothing until the user presses CLOSE. It closes the caller once
+# its turn ends, and doesn't ask about a session that is working or waiting for the user unless
+# --force.
 cmd_close() {
     force=false close_json='' close_names=''
     while [ $# -gt 0 ]; do
@@ -577,15 +578,10 @@ cmd_close() {
     begin_letter
     finish_letter close ",\"sessions\":[${close_json}],\"force\":$force"
     if [ -z "$close_names" ]; then
-        if $force; then
-            say "Shepherdr closes this session now: its pane and its agent end."
-        else
-            say "Shepherdr closes this session once you finish this turn: its pane and its agent end."
-        fi
+        say "Asked Shepherdr to close this session. It closes once the user presses CLOSE there, after you finish this turn: its pane and its agent end."
     else
-        say "Asked Shepherdr to close $close_names: their panes and agents end."
-        $force || say "A session that is working or waiting for the user stays open; Shepherdr tells it why."
-        say "On another machine, the user may approve it first."
+        say "Asked Shepherdr to close $close_names. Each closes once the user presses CLOSE there: their panes and agents end."
+        $force || say "Shepherdr doesn't ask about a session that is working or waiting for the user, and tells this session why."
     fi
 }
 
@@ -675,12 +671,12 @@ Usage:
       --name NAME                      Its agent and workspace name (lowercase)
       --prompt TEXT | --prompt-file F  Its first prompt
       --split right|down               Beside this pane instead of a new workspace
-      --no-wait                        Don't put this session on hold for it
+      --no-wait                        Don't put this session on hold for it (only when the user asks)
   shepherdr handoff [--to NAME] [--file F]... [--message-file F | MESSAGE]
                                        Hand work back to the session waiting for you
   shepherdr wait-for NAME...           Put this session on hold until those finish
   shepherdr resume [NAME...]           Stop waiting for them, or for all
-  shepherdr close [--force] [NAME...]  Close sessions, or this one once this turn ends
+  shepherdr close [--force] [NAME...]  Ask the user to close sessions, or this one
   shepherdr pin URL [--title TEXT]     Add a link to this session's resources
   shepherdr open URL                   Open a page in this session's browser
   shepherdr notify MESSAGE             Show the user a notification

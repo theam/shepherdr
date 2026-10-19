@@ -653,7 +653,7 @@ final class CompassController {
             model.newSession = NewSessionDraft(
                 directory: spawn.directory, machineID: machineID ?? Machine.local.id, placement: nil,
                 name: spawn.name, agentKind: spawn.agent == "shell" ? nil : (spawn.agent ?? config.agent),
-                prompt: spawn.prompt, compass: .init(day: currentDay, item: item, handsBack: agentID != nil))
+                prompt: spawn.prompt, compass: .init(day: currentDay, item: item, compassWaits: agentID != nil))
         case .ask(let text):
             guard let id = agentID else { problem = "Start the Compass session first: RUN NOW."; return }
             model.fill(text, into: id)
@@ -700,10 +700,10 @@ final class CompassController {
     }
 
     /// A session you started from the page: the page shows it, the agent reads it next run, and
-    /// its handoff comes back to Compass.
+    /// Compass's session waits for it, so a handoff you ask it for comes back to Compass.
     func started(_ session: Agent.ID, named name: String, for draft: NewSessionDraft.FromCompass) {
         guard let model else { return }
-        if draft.handsBack, let compass = agentID { model.relations.setWaiting(compass, for: session, true) }
+        if draft.compassWaits, let compass = agentID { model.relations.setWaiting(compass, for: session, true) }
         guard let item = draft.item else { return }
         var marks = folder.readMarks(draft.day)
         let machine = model.machine(for: session)

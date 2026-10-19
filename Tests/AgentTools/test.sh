@@ -98,7 +98,7 @@ done_test() { passed=$((passed + 1)); }
 setup version
 run version
 expect_status 0
-expect_output "shepherdr 4 (protocol 1)"
+expect_output "shepherdr 5 (protocol 1)"
 run help
 expect_output "shepherdr spawn [options]"
 run skill
@@ -310,7 +310,7 @@ done_test
 setup close
 run close
 expect_status 0
-expect_output "once you finish this turn"
+expect_output "once the user presses CLOSE there, after you finish this turn"
 the_letter
 expect_json '"kind":"close","from":{"pane":"w1:p1","terminal":"term_caller1"},"sessions":[],"force":false'
 expect_doorbell

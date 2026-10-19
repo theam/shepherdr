@@ -24,7 +24,7 @@ A bilingual (English/Spanish) quick guide with the same content comes with the a
 - **Notifications:** a macOS notification tells you when an agent finishes or needs you, with what it last said, and when a pull request's checks finish. Click it to open the session.
 - **Sessions on hold:** mark a session as waiting for others, such as a planner waiting for the subagents it launched. It shows an hourglass until they finish, and the sessions it waits for are listed under it, in a tree you can collapse.
 - **Compass:** the window's first mode, before Agents (**⌥⌘1** and **⌥⌘2**), with a page of your day kept by an agent of its own on this Mac. It starts by summing up your sessions; ask it in its terminal to cover more, such as your calendar or mail. It updates on the schedule you choose, keeps every day's page and a copy per run in `~/.shepherdr/compass`, commits them to Git and can push them to a private repository. Buttons on the page start the sessions it suggests, once you check them in New Session.
-- **Agents that coordinate:** Shepherdr installs a small `shepherdr` command and a skill for Claude Code and Codex on each machine, Linux included. An agent asked to "start a session on buildbox" starts it there, nested under its own session, which goes on hold until the new one finishes. The new session hands its result back with `shepherdr handoff`, and Shepherdr delivers it as a prompt once the coordinator is free. Machines never connect to your Mac: Shepherdr collects what agents leave for it.
+- **Agents that coordinate:** Shepherdr installs a small `shepherdr` command and a skill for Claude Code and Codex on each machine, Linux included. An agent asked to "start a session on buildbox" starts it there, nested under its own session, which goes on hold until the new one finishes: starting sessions always fans out. When you ask the new session to hand its result back, it does with `shepherdr handoff`, and Shepherdr delivers it as a prompt once the coordinator is free. Machines never connect to your Mac: Shepherdr collects what agents leave for it.
 - **Create and close sessions:** **⌘N** creates a Herdr workspace with a shell in a folder; start Claude Code, Codex or any other supported agent in it and it joins the queue. Create one in a group with its **+**, or next to a session with **New Session in Same Folder…** (**⇧⌘N**). **Close Session…** in a session's context menu ends its pane after confirmation. **Rename…** renames its Herdr workspace.
 - **Overview:** how many sessions need you, are working, done or idle, and a card per machine with its sessions and its processor, memory and disk use. Click states and machines to list the sessions in any combination of them. Plain shell panes are listed separately.
 - **Lid status:** the foot of the sidebar tells you whether it's safe to close the lid. While agents work on this Mac it warns you not to, since sleep would pause them; remote sessions don't count, they keep going.
@@ -244,7 +244,7 @@ When nobody can see the terminal on screen for 30 seconds, because Shepherdr's w
 
 ## Agents that coordinate
 
-Agents can start sessions, wait for them and hand work back through Shepherdr, on any of your machines. They do it with `~/.shepherdr/bin/shepherdr`, a small command Shepherdr installs on each machine, and a skill that teaches Claude Code and Codex when to use it. Say "start a session on buildbox that fixes the failing test" to an agent, and it starts one there with your prompt. The new session nests under the agent's own, which goes on hold until it finishes. When the new session is done, its result comes back to the agent as a prompt.
+Agents can start sessions, wait for them and hand work back through Shepherdr, on any of your machines. They do it with `~/.shepherdr/bin/shepherdr`, a small command Shepherdr installs on each machine, and a skill that teaches Claude Code and Codex when to use it. Say "start a session on buildbox that fixes the failing test" to an agent, and it starts one there with your prompt. The new session nests under the agent's own, which goes on hold until it finishes. Handing off and closing are yours to decide: ask the new session to hand off, or use **HANDOFF AND CLOSE**, and its result comes back to the agent as a prompt. The skill tells agents never to hand off or close on their own, and never to ask the sessions they start to.
 
 ### Install the agent tools
 
@@ -261,19 +261,19 @@ When Shepherdr brings newer tools, the machine's sessions offer **UPDATE**. **Se
 | `shepherdr machines` | Which machine this is, and how each other machine is reached |
 | `shepherdr folders [--machine NAME]` | The folders where sessions already work on a machine |
 | `shepherdr spawn [--machine NAME] [--cwd DIR] [--kind KIND \| --shell] [--name NAME] [--prompt TEXT \| --prompt-file F] [--split right\|down] [--no-wait]` | Starts a session and links it to the caller |
-| `shepherdr handoff [--to NAME] [--file F]… [MESSAGE \| --message-file F]` | Hands work back to the session waiting for the caller, or to a named one |
+| `shepherdr handoff [--to NAME] [--file F]… [MESSAGE \| --message-file F]` | Hands work back to the session waiting for the caller, or to a named one, when you ask |
 | `shepherdr wait-for NAME…` / `resume [NAME…]` | Puts the caller on hold for other sessions, or takes it off |
 | `shepherdr pin URL [--title TEXT]` | Adds a link to the caller's resources |
 | `shepherdr open URL` | Opens a page in the caller's browser in Shepherdr |
 | `shepherdr notify MESSAGE` | Shows you a notification |
-| `shepherdr close [--force] [NAME…]` | Closes those sessions, or the caller's own once its turn ends |
+| `shepherdr close [--force] [NAME…]` | Asks you to close those sessions, or the caller's own |
 | `shepherdr status` | This machine, the caller's pane and letters not collected yet |
 
-`spawn` creates a Herdr workspace in the folder (or splits the caller's pane with `--split`), starts the agent, by default the caller's own kind, and sends it the prompt. Shepherdr puts the new session right after the caller, in its group, nested under it, and keeps the caller on hold until the new one finishes; `--no-wait` only places it. If the agent stops at a startup question, such as trusting the folder, Shepherdr sends the prompt once it is ready. Names are Herdr agent names, and the workspace gets the same one.
+`spawn` creates a Herdr workspace in the folder (or splits the caller's pane with `--split`), starts the agent, by default the caller's own kind, and sends it the prompt. Shepherdr puts the new session right after the caller, in its group, nested under it, and keeps the caller on hold until the new one finishes; `--no-wait`, which the skill keeps for when you ask for a session that isn't linked, only places it. If the agent stops at a startup question, such as trusting the folder, Shepherdr sends the prompt once it is ready. Names are Herdr agent names, and the workspace gets the same one.
 
 A handoff goes to the sessions waiting for its sender, unless `--to` names another by its agent or workspace name, with `@machine` to tell machines apart. Shepherdr delivers it as a prompt once that session is free (idle or done), one at a time, with the message and the paths of its files. The files are kept on this Mac in `~/.shepherdr/inbox`; for a session on another machine, Shepherdr copies them there first. If nobody waits for its sender, the handoff waits in the session's mail panel with **SEND TO**.
 
-Ask an agent to close a session, its own included, and it runs `shepherdr close`; the skill tells agents to close sessions only when you ask. Shepherdr closes them as **Close Session** does, ending their pane and agent. With no name, the agent's own session closes once it finishes its turn, so its last answer gets written. Named sessions close right away, except one whose agent is working or needs you: that one stays open and the asking session says why, unless the agent added `--force`, which the skill keeps for when you asked for it. Compass's own agent never closes this way.
+Ask an agent to close a session, its own included, and it runs `shepherdr close`; the skill tells agents to close sessions only when you ask, and, when you ask for both, to hand off first. Nothing closes until you confirm: each session asked for shows a close request in its mail panel, with a notification, and **CLOSE** closes it as **Close Session** does, ending its pane and agent. A session that asked to close itself closes once its agent finishes its turn, so its last answer gets written. Shepherdr doesn't ask about a session whose agent is working or needs you; the asking session says why, unless the agent added `--force`, which the skill keeps for when you asked for it. Compass's own agent never closes this way.
 
 ### Machine lists
 
@@ -285,14 +285,14 @@ The lists only hold names and routes: never hosts, users, ports or keys. Herdr p
 
 Machines never connect to this Mac. The command leaves each request as a letter in `~/.shepherdr/outbox` on its machine, and rings a doorbell: a token on the caller's Herdr pane, which Shepherdr sees in its next refresh. Shepherdr then collects the machine's letters over SSH, keeps them in `~/.shepherdr/inbox` on this Mac, and moves them to `outbox/.collected` there. A manual refresh (**⌘R**) also looks in every outbox, for letters whose doorbell was lost when Herdr restarted. While Shepherdr is closed, letters wait.
 
-Letters are data: Shepherdr checks every field, accepts only http and https links and plain files with safe names, and never runs anything in them. Letters from this Mac apply on their own. From another machine, four things wait for you in the session's mail panel, on the overview and as a notification, with an amber envelope in the queue:
+Letters are data: Shepherdr checks every field, accepts only http and https links and plain files with safe names, and never runs anything in them. Letters from this Mac apply on their own, except requests to close a session, which always wait for you. From another machine, four things wait for you in the session's mail panel, on the overview and as a notification, with an amber envelope in the queue:
 
 - **Handoffs to a session on a different machine**, since their text becomes a prompt for an agent there: **LET THROUGH** delivers them, **VIEW** shows the message first.
 - **Requests for sessions** on machines it can't reach: **START** starts it with the requested folder, agent and prompt, linked to the session that asked.
 - **Pages to open:** **OPEN** opens it in the session's browser.
-- **Requests to close a session on a different machine:** **CLOSE** closes it.
+- **Requests to close a session**, from any machine, this Mac included: **CLOSE** closes it.
 
-**Settings → Agents → Trust its letters** lets a machine's letters through without asking. A cyan envelope means mail waits for its session to be free. Shepherdr keeps the letters' files for a month.
+**Settings → Agents → Trust its letters** lets a machine's letters through without asking, except requests to close a session. A cyan envelope means mail waits for its session to be free. Shepherdr keeps the letters' files for a month.
 
 ## Compass
 
@@ -329,7 +329,7 @@ The page opens in the first tab of Compass's browser, which can't be closed; lin
 
 The page's buttons ask Shepherdr for something, and nothing happens until you confirm:
 
-- **Start a session** opens New Session with the machine, folder, agent, name and first prompt filled in, and where in the queue it goes. Read the prompt before you start: the page is built from what others wrote. The session starts out of sight, the page shows it beside the button with its state, and, with **Hand its result back to Compass** ticked, its handoff comes back to Compass's agent, which updates the page.
+- **Start a session** opens New Session with the machine, folder, agent, name and first prompt filled in, and where in the queue it goes. Read the prompt before you start: the page is built from what others wrote. The session starts out of sight, and the page shows it beside the button with its state. With **Compass waits for it** ticked, as it is by default, Compass's session goes on hold for it, like any session an agent starts, and a handoff you ask it for comes back to Compass's agent, which updates the page.
 - **Ask** puts text in Compass's prompt editor, such as "apply P1", for you to send.
 - **Open a session** and **prompt a session** switch to Agents and open that session; a prompt lands in its editor for you to send.
 - **Done** marks an item done on the page. The agent sees your marks in its next run.

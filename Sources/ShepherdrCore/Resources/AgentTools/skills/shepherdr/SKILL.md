@@ -1,11 +1,11 @@
 ---
 name: shepherdr
-description: "Start agent sessions on this machine or on other machines in the user's Shepherdr network, wait for them, hand results back to the session coordinating you, close sessions, and pin links or notify the user in Shepherdr. Use when the user asks to create, start or launch a session or agent on a machine or server by name, to hand off or report back to a coordinating session, to wait for another session, or to close a session, this one included. Requires HERDR_ENV=1."
+description: "Start agent sessions on this machine or on other machines in the user's Shepherdr network and wait for them; when the user asks, hand results back to the session coordinating you or close sessions; pin links or notify the user in Shepherdr. Use when the user asks to create, start or launch a session or agent on a machine or server by name, to hand off or report back to a coordinating session, to wait for another session, or to close a session, this one included. Requires HERDR_ENV=1."
 ---
 
 # Shepherdr
 
-Shepherdr is the user's Mac app for the Herdr sessions on all their machines. Its command line, `~/.shepherdr/bin/shepherdr`, starts sessions that Shepherdr links to yours, and sends work back to the session that coordinates you.
+Shepherdr is the user's Mac app for the Herdr sessions on all their machines. Its command line, `~/.shepherdr/bin/shepherdr`, starts sessions that Shepherdr links to yours, and, when the user asks, sends work back to the session that coordinates you.
 
 It never connects to the user's Mac. It writes letters in `~/.shepherdr/outbox` on this machine, and Shepherdr collects them within seconds while it is open. If Shepherdr is closed, they wait there.
 
@@ -34,22 +34,22 @@ It says which machine you are on and how each of the others is reached. Never gu
 
 ```bash
 ~/.shepherdr/bin/shepherdr spawn --machine buildbox --cwd ~/src/api --name api-fix \
-  --prompt "Fix the failing API test. When you finish, hand the result back with ~/.shepherdr/bin/shepherdr handoff."
+  --prompt "Fix the failing API test."
 ```
 
 - Leave out `--machine` for this machine. `--split right` or `--split down` opens it beside your pane instead of in a new workspace (this machine only).
 - `--cwd` defaults to your folder here, and to the home folder elsewhere. `shepherdr folders --machine NAME` lists the folders where sessions already work.
 - `--kind claude|codex|…` defaults to your own agent. `--shell` starts a plain shell, only when the user asks for one: run builds, tests and scripts yourself, with your own tools, so their output comes back to you and no session is left behind.
 - `--name` is the new agent's Herdr name: a lowercase letter, then lowercase letters, digits, `-` or `_`. It is made up from the folder if you leave it out.
-- Shepherdr nests the new session under yours and keeps yours on hold until it finishes. Add `--no-wait` when you don't need its result.
-- In the prompt, ask it to hand its result back with `~/.shepherdr/bin/shepherdr handoff` when it finishes.
+- Starting sessions fans out from yours: Shepherdr nests each new one under yours and keeps yours on hold until they finish. Add `--no-wait` only when the user asks for a session that isn't linked to yours.
+- Don't ask it in the prompt to hand off or close when it finishes: the user decides when a session hands off.
 - If the agent stops at a startup question, such as trusting the folder, Shepherdr sends your prompt once the user answers it.
 
 To follow it from here, use Herdr with the agent name: `herdr agent read NAME`, or `herdr --machine PROFILE agent read NAME` on another machine. `spawn` prints which.
 
 ## Hand work back
 
-When you finish work that another session asked for, hand the result back:
+Hand off only when the user asks you to, or when Shepherdr asks you to for them. A handoff wraps up your work for the session waiting for you:
 
 ```bash
 ~/.shepherdr/bin/shepherdr handoff --file REPORT.md "Opened theam/api#41. The flaky test was a race in the cache; tests pass."
@@ -71,17 +71,16 @@ When you finish work that another session asked for, hand the result back:
 
 ## Close sessions
 
-Close a session only when the user asks you to. Closing ends its Herdr pane and the agent in it, and nothing in it can be recovered.
+Close a session only when the user asks you to. Shepherdr then shows the user a close request, and the session ends only when they press **CLOSE**. Closing ends its Herdr pane and the agent in it, and nothing in it can be recovered.
 
 ```bash
 ~/.shepherdr/bin/shepherdr close
 ~/.shepherdr/bin/shepherdr close reviewer tester@buildbox
 ```
 
-- With no name, it closes your own session once you finish this turn. Keep your last message short: the session closes right after it, and the user may not get to read it.
-- With names, it closes those sessions, by agent or workspace name like `handoff --to`. A session that is working or waiting for the user stays open, and Shepherdr shows you why; add `--force` only when the user asked to close it anyway.
-- Closing a session on another machine may wait for the user's approval in Shepherdr.
-- If you finish work another session waits for, hand it back with `handoff` before you close.
+- With no name, it asks to close your own session. Once the user confirms, it closes after you finish this turn.
+- With names, it asks to close those sessions, by agent or workspace name like `handoff --to`. Shepherdr doesn't ask about a session that is working or waiting for the user, and shows you why; add `--force` only when the user asked to close it anyway.
+- When the user asks you to hand off and close, run `handoff` first, then `close`.
 
 ## Links and notices
 

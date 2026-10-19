@@ -179,7 +179,9 @@ struct MailPanel: View {
         case .needsApproval:
             switch item.kind {
             case .handoff: return "It comes from another machine: let it through to deliver it."
-            case .close: return "It comes from another machine: close the session only if you meant it to."
+            case .close:
+                let who = item.sender == item.recipient ? "Its own agent" : "An agent"
+                return "\(who) asked for this. It closes only when you press CLOSE."
             default: return nil
             }
         case .needsRecipient:
