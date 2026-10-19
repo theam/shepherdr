@@ -153,63 +153,72 @@ struct PixelFlock: View {
 }
 
 /// A pixel-art face for the lid status: a smile when this Mac may sleep, and gritted teeth with a
-/// falling bead of sweat while its agents work.
+/// falling bead of sweat while its agents work. With coffee on, each wears wide-open eyes that
+/// drift about.
 struct PixelFace: View {
     enum Mood { case happy, working }
     let mood: Mood
+    var caffeinated = false
     var pixel: CGFloat = 1.5
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let happy = [
-        "..GGGGG..",
-        ".GGGGGGG.",
-        "GGkGGGkGG",
-        "GGkGGGkGG",
-        "GGGGGGGGG",
-        "GkGGGGGkG",
-        "GGkkkkkGG",
-        ".GGGGGGG.",
-        "..GGGGG..",
-    ]
-    private static let working = [
-        "..AAAAA..",
-        ".AAAAAAA.",
-        "AkkAAAkkA",
-        "AAkAAAkAA",
-        "AAAAAAAAA",
-        "AkkkkkkkA",
-        "AkWkWkWkA",
-        ".AkkkkkA.",
-        "..AAAAA..",
-    ]
+    /// The face without eyes: the top two rows, then from the row under them.
+    private static let happyTop = ["..GGGGG..", ".GGGGGGG."]
+    private static let happyRest = ["GGGGGGGGG", "GkGGGGGkG", "GGkkkkkGG", ".GGGGGGG.", "..GGGGG.."]
+    private static let workingTop = ["..AAAAA..", ".AAAAAAA."]
+    private static let workingRest = ["AAAAAAAAA", "AkkkkkkkA", "AkWkWkWkA", ".AkkkkkA.", "..AAAAA.."]
     private static let colors: [Character: Color] = [
         "G": Theme.phosphor, "A": Theme.amber, "k": Theme.background, "W": Color(hex: 0xFFF4D6),
     ]
+    /// Where the pupils look over the frames of the caffeinated cycle.
+    private static let looks = [0, 1, 0, -1, 0, 1]
+
+    /// The face's rows; `look` moves the pupils of the wide eyes a column, and is ignored for the
+    /// narrow eyes of a face without coffee.
+    private static func sprite(_ mood: Mood, caffeinated: Bool, look: Int) -> [String] {
+        let skin: Character = mood == .happy ? "G" : "A"
+        guard caffeinated else {
+            return mood == .happy
+                ? happyTop + ["GGkGGGkGG", "GGkGGGkGG"] + happyRest
+                : workingTop + ["AkkAAAkkA", "AAkAAAkAA"] + workingRest
+        }
+        // Three rows of white, 3 columns wide, with a pupil in the middle row.
+        let white = String(skin) + "WWW" + String(skin) + "WWW" + String(skin)
+        var middle = Array(white)
+        middle[2 + look] = "k"
+        middle[6 + look] = "k"
+        let top = mood == .happy ? happyTop : workingTop
+        let rest = mood == .happy ? happyRest : workingRest
+        // The wide eyes take the row the narrow ones leave empty under them.
+        return top + [white, String(middle), white] + rest.dropFirst()
+    }
 
     var body: some View {
-        if mood == .working && !reduceMotion {
-            let pixel = pixel
-            FrameCycle(count: 3, interval: 0.35, size: CGSize(width: 11 * pixel, height: 9 * pixel), key: pixel) { drop, context in
-                for (row, line) in Self.working.enumerated() {
-                    for (column, character) in line.enumerated() {
-                        guard let color = Self.colors[character] else { continue }
-                        context.setFillColor(NSColor(color).cgColor)
-                        context.fill(CGRect(x: CGFloat(column) * pixel, y: CGFloat(row) * pixel, width: pixel, height: pixel))
-                    }
-                }
-                context.setFillColor(NSColor(Theme.cyan).cgColor)
-                context.fill(CGRect(x: 10 * pixel, y: CGFloat(1 + drop * 2) * pixel, width: pixel, height: pixel * 2))
+        let size = CGSize(width: 11 * pixel, height: 9 * pixel)
+        if reduceMotion || (!caffeinated && mood == .happy) {
+            face(look: 0, drop: mood == .working ? 0 : nil)
+        } else if caffeinated {
+            // Six slow frames of 0.6 s, so it doesn't distract: the pupils drift, and the sweat of a working face falls a row every two.
+            let (mood, pixel) = (mood, pixel)
+            FrameCycle(count: Self.looks.count, interval: 0.6, size: size, key: "\(mood)-\(pixel)-coffee") { frame, context in
+                Self.draw(mood, caffeinated: true, look: Self.looks[frame], drop: mood == .working ? frame / 2 : nil,
+                          pixel: pixel, in: context)
             }
-            .frame(width: 11 * pixel, height: 9 * pixel)
+            .frame(width: size.width, height: size.height)
             .accessibilityHidden(true)
         } else {
-            face(drop: mood == .working ? 0 : nil)
+            let pixel = pixel
+            FrameCycle(count: 3, interval: 0.35, size: size, key: pixel) { drop, context in
+                Self.draw(.working, caffeinated: false, look: 0, drop: drop, pixel: pixel, in: context)
+            }
+            .frame(width: size.width, height: size.height)
+            .accessibilityHidden(true)
         }
     }
 
     /// The bead of sweat runs down the side of the face, a row per step.
-    private func face(drop: Int?) -> some View {
-        let sprite = mood == .happy ? Self.happy : Self.working
+    private func face(look: Int, drop: Int?) -> some View {
+        let sprite = Self.sprite(mood, caffeinated: caffeinated, look: look)
         return Canvas { context, _ in
             for (row, line) in sprite.enumerated() {
                 for (column, character) in line.enumerated() {
@@ -225,6 +234,104 @@ struct PixelFace: View {
         }
         .frame(width: 11 * pixel, height: 9 * pixel)
         .accessibilityHidden(true)
+    }
+
+    private static func draw(_ mood: Mood, caffeinated: Bool, look: Int, drop: Int?, pixel: CGFloat, in context: CGContext) {
+        for (row, line) in sprite(mood, caffeinated: caffeinated, look: look).enumerated() {
+            for (column, character) in line.enumerated() {
+                guard let color = colors[character] else { continue }
+                context.setFillColor(NSColor(color).cgColor)
+                context.fill(CGRect(x: CGFloat(column) * pixel, y: CGFloat(row) * pixel, width: pixel, height: pixel))
+            }
+        }
+        if let drop {
+            context.setFillColor(NSColor(Theme.cyan).cgColor)
+            context.fill(CGRect(x: 10 * pixel, y: CGFloat(1 + drop * 2) * pixel, width: pixel, height: pixel * 2))
+        }
+    }
+}
+
+/// A pixel-art mug seen from the side, without a saucer. Lit and steaming while there is coffee,
+/// dim and empty when there isn't.
+struct PixelCup: View {
+    let isOn: Bool
+    var pixel: CGFloat = 1.5
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let mug = [
+        "AAAAAAAA..",
+        "AhAAAAAaAA",
+        "AhAAAAAa.A",
+        "AhAAAAAa.A",
+        "AhAAAAAaAA",
+        ".AAAAAAa..",
+        "..aaaaa...",
+    ]
+    private static let steamRows = 4
+    private static let columns = 10
+    private static let steamFrames = 4
+
+    /// The cells of the steam in one frame, as (column, row, strength): two wisps that sway as they
+    /// climb and thin out toward the top.
+    private static func steam(frame: Int) -> [(column: Int, row: Int, strength: Double)] {
+        var cells: [(Int, Int, Double)] = []
+        for (base, phase) in [(2, 0), (5, 1)] {
+            for row in 0..<steamRows {
+                let step = row + frame + phase
+                guard step % 3 != 0 else { continue }
+                cells.append((base + (step / 2) % 2, row, 0.25 + 0.55 * Double(row + 1) / Double(steamRows)))
+            }
+        }
+        return cells
+    }
+
+    private var size: CGSize { CGSize(width: CGFloat(Self.columns) * pixel, height: CGFloat(Self.steamRows + Self.mug.count) * pixel) }
+
+    var body: some View {
+        if isOn && !reduceMotion {
+            let pixel = pixel
+            FrameCycle(count: Self.steamFrames, interval: 0.8, size: size, key: pixel) { frame, context in
+                Self.draw(lit: true, steam: frame, pixel: pixel, in: context)
+            }
+            .frame(width: size.width, height: size.height)
+            .shadow(color: Theme.amber.opacity(0.5), radius: 3)
+            .accessibilityHidden(true)
+        } else {
+            Canvas { context, _ in
+                Self.paint(lit: isOn, steam: isOn ? 0 : nil, pixel: pixel) { rect, color, alpha in
+                    context.fill(Path(rect), with: .color(color.opacity(alpha)))
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .shadow(color: isOn ? Theme.amber.opacity(0.5) : .clear, radius: 3)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private static func draw(lit: Bool, steam: Int, pixel: CGFloat, in context: CGContext) {
+        paint(lit: lit, steam: steam, pixel: pixel) { rect, color, alpha in
+            context.setFillColor(NSColor(color).withAlphaComponent(alpha).cgColor)
+            context.fill(rect)
+        }
+    }
+
+    /// Calls `fill` for each cell: the steam on top, then the mug under it.
+    private static func paint(lit: Bool, steam frame: Int?, pixel: CGFloat, fill: (CGRect, Color, Double) -> Void) {
+        if let frame {
+            for cell in steam(frame: frame) {
+                fill(CGRect(x: CGFloat(cell.column) * pixel, y: CGFloat(cell.row) * pixel, width: pixel, height: pixel),
+                     Color(hex: 0xFFF4D6), cell.strength)
+            }
+        }
+        let colors: [Character: Color] = lit
+            ? ["A": Theme.amber, "a": Color(hex: 0xC98A2E), "h": Color(hex: 0xFFD98A)]
+            : ["A": Theme.dim, "a": Theme.faint, "h": Theme.dim]
+        for (row, line) in mug.enumerated() {
+            for (column, character) in line.enumerated() {
+                guard let color = colors[character] else { continue }
+                fill(CGRect(x: CGFloat(column) * pixel, y: CGFloat(steamRows + row) * pixel, width: pixel, height: pixel), color, 1)
+            }
+        }
     }
 }
 

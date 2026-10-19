@@ -333,6 +333,8 @@ final class AppModel {
     let courier = Courier()
     /// New releases of Shepherdr, and updating to them.
     let updates = UpdateController()
+    /// Whether Shepherdr keeps this Mac from sleeping; off every time it opens.
+    let keepAwake = KeepAwake()
 
     init(cluster: ClusterStore = ClusterStore(), order: SessionOrderStore = SessionOrderStore(),
          relations: SessionRelationStore = SessionRelationStore(), sessionStates: SessionStateStore = SessionStateStore()) {

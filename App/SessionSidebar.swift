@@ -232,7 +232,11 @@ struct SessionSidebar: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 7) {
-            LidStatus(cluster: cluster)
+            HStack(alignment: .center, spacing: 8) {
+                LidStatus(cluster: cluster, keepAwake: model.keepAwake)
+                Spacer(minLength: 4)
+                CoffeeButton(keepAwake: model.keepAwake)
+            }
             connectionStatus
         }
         .font(Theme.mono(10))
@@ -268,6 +272,7 @@ struct SessionSidebar: View {
 /// Unknown, and hidden, while the local Herdr does not answer.
 private struct LidStatus: View {
     let cluster: ClusterStore
+    let keepAwake: KeepAwake
 
     var body: some View {
         if cluster.machines.first(where: { $0.machine.isLocal })?.connection == .online {
@@ -275,16 +280,41 @@ private struct LidStatus: View {
                 $0.id.machineID == Machine.local.id && !$0.isStale && $0.agent.state == .working
             }.count
             HStack(spacing: 7) {
-                PixelFace(mood: working > 0 ? .working : .happy)
-                Text(working > 0 ? "\(working) local session\(working == 1 ? "" : "s") running · don't close the lid"
-                                 : "it's safe to close the lid")
-                    .foregroundStyle(working > 0 ? Theme.amber : Theme.phosphor.opacity(0.85))
+                PixelFace(mood: working > 0 ? .working : .happy, caffeinated: keepAwake.isOn)
+                Text(keepAwake.isOn ? (keepAwake.onBattery ? "awake · but the lid still sleeps it" : "awake · won't sleep on power")
+                     : working > 0 ? "\(working) local session\(working == 1 ? "" : "s") running · don't close the lid"
+                                   : "it's safe to close the lid")
+                    .foregroundStyle(keepAwake.isOn ? (keepAwake.onBattery ? Theme.amber : Theme.cyan)
+                                     : working > 0 ? Theme.amber : Theme.phosphor.opacity(0.85))
                     .lineLimit(1).truncationMode(.tail)
             }
-            .help(working > 0 ? "Closing the lid puts this Mac to sleep and pauses the agents working on it. Remote sessions keep going."
-                              : "No agent is working on this Mac. Remote sessions keep going while it sleeps.")
+            .help(keepAwake.isOn && keepAwake.onBattery ? "This Mac is on battery: it won't sleep by itself, but closing the lid still puts it to sleep and pauses its agents. Plug it in to keep them going."
+                  : keepAwake.isOn ? "Coffee is on: this Mac won't sleep while it's plugged in. Remote sessions keep going either way."
+                  : working > 0 ? "Closing the lid puts this Mac to sleep and pauses the agents working on it. Remote sessions keep going."
+                  : "No agent is working on this Mac. Remote sessions keep going while it sleeps.")
             .accessibilityElement(children: .combine)
         }
+    }
+}
+
+/// The coffee cup: keeps this Mac awake until you click it again or quit. The menu also keeps the
+/// screen on, which agents don't need, so it starts off.
+private struct CoffeeButton: View {
+    @Bindable var keepAwake: KeepAwake
+
+    var body: some View {
+        Button { keepAwake.toggle() } label: {
+            PixelCup(isOn: keepAwake.isOn)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Toggle("Keep the Screen On Too", isOn: $keepAwake.keepsScreenOn)
+        }
+        .help(keepAwake.isOn ? "Coffee is on: this Mac won't sleep. Click to let it sleep again."
+                             : "Keep this Mac awake so agents keep working. Right-click to keep the screen on too.")
+        .accessibilityLabel("Keep this Mac awake")
+        .accessibilityValue(keepAwake.isOn ? "on" : "off")
+        .accessibilityAddTraits(.isToggle)
     }
 }
 
