@@ -23,11 +23,90 @@ public struct TerminalPalette: Equatable, Sendable {
     }
 }
 
-/// A live Herdr terminal embedded in the window's work area. Mounting it connects the store;
-/// removing it detaches this client only, never the pane or its process.
+/// A terminal and its view, kept while its session is out of sight: going back shows what it last
+/// painted at once, and the store attaches again if it rested meanwhile. The first time it is
+/// shown it connects; `close()` detaches this client for good, never the pane or its process.
+@MainActor
+public final class TerminalHolder {
+    public let store: TerminalStore
+    let view: ConsoleTerminalView
+    private let delegate: TerminalSurface.Delegate
+    /// Whether anyone can see the terminal, which the store rests on while nobody does.
+    private var sight: TerminalSight?
+    var palette: TerminalPalette
+    private var isOpen = false
+    /// When it was last put on screen or taken off it.
+    public private(set) var lastShown = Date()
+
+    /// Shown in the window now.
+    public var isShown: Bool { view.superview != nil }
+
+    public init(store: TerminalStore, palette: TerminalPalette, font: NSFont) {
+        self.store = store
+        self.palette = palette
+        let view = ConsoleTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 520), font: font)
+        self.view = view
+        delegate = TerminalSurface.Delegate(store: store)
+        TerminalSurface.apply(palette, to: view)
+        // Selection and copy remain native; plain clicks reach the program through Herdr (onClick).
+        view.allowMouseReporting = false
+        // Option types what the keyboard layout gives it (@, #, €…), as in Terminal; the word-wise
+        // and line-wise keys get their sequences from installInteractions.
+        view.optionAsMetaKey = false
+        view.terminalDelegate = delegate
+        // Herdr keeps the history and paints whatever part of it is shown, so the view keeps none:
+        // lines a resize pushed out would only be a stale copy to scroll into, hiding live output.
+        view.getTerminal().changeHistorySize(0)
+        view.onScroll = { [weak store] up, lines in store?.scroll(up: up, lines: lines) }
+        view.onClick = { [weak store] column, row in store?.click(column: column, row: row) }
+        store.display = { [weak view] frame in view?.show(frame) }
+        store.resetDisplay = { [weak view] in view?.resetScreen() }
+    }
+
+    /// The view is in a window again: it reads keys and the mouse, and the store attaches if it
+    /// rested meanwhile, or for the first time.
+    func mounted() {
+        lastShown = Date()
+        view.installInteractions()
+        if sight == nil {
+            sight = TerminalSight(view: view) { [weak store, weak view] visible in
+                store?.setVisible(visible)
+                if visible { view?.scanDeferredResources() }
+            }
+            view.onWindowChange = { [weak sight] in sight?.update() }
+        }
+        guard !isOpen else { return }
+        isOpen = true
+        store.resize(columns: view.getTerminal().cols, rows: view.getTerminal().rows)
+        store.open()
+    }
+
+    /// The view left the screen with its session: it stops reading events, and the store rests
+    /// once nobody has seen it for a while, keeping what it painted.
+    func unmounted() {
+        lastShown = Date()
+        view.removeInteractions()
+    }
+
+    /// Lets go of the terminal: detaches this client, never the pane or its process.
+    public func close() {
+        sight?.stop()
+        sight = nil
+        view.onWindowChange = nil
+        view.removeInteractions()
+        view.removeFromSuperview()
+        store.disconnect()
+        store.display = nil
+        store.resetDisplay = nil
+        view.terminalDelegate = nil
+    }
+}
+
+/// A live Herdr terminal embedded in the window's work area: it shows a `TerminalHolder`'s view,
+/// which outlives it, so leaving the session keeps the terminal and what it painted.
 @MainActor
 public struct TerminalSurface: NSViewRepresentable {
-    let store: TerminalStore
+    let holder: TerminalHolder
     let palette: TerminalPalette
     let font: NSFont
     /// Changing this gives the terminal keyboard focus.
@@ -43,13 +122,13 @@ public struct TerminalSurface: NSViewRepresentable {
     /// Files and images dropped on the terminal; nil refuses drops.
     let onDropFiles: ((_ files: [URL]) -> Void)?
 
-    public init(store: TerminalStore, palette: TerminalPalette, font: NSFont, focusRequest: Int = 0,
+    public init(holder: TerminalHolder, palette: TerminalPalette, font: NSFont, focusRequest: Int = 0,
                 resolveFile: @escaping (_ path: String) -> URL? = { _ in nil },
                 resolveSession: @escaping (_ row: [Character], _ column: Int) -> URL? = { _, _ in nil },
                 onResources: @escaping (_ found: [SessionResource]) -> Void = { _ in },
                 onDropFiles: ((_ files: [URL]) -> Void)? = nil,
                 openLink: @escaping (_ url: URL, _ external: Bool) -> Void = { url, _ in NSWorkspace.shared.open(url) }) {
-        self.store = store
+        self.holder = holder
         self.palette = palette
         self.font = font
         self.focusRequest = focusRequest
@@ -60,65 +139,44 @@ public struct TerminalSurface: NSViewRepresentable {
         self.openLink = openLink
     }
 
-    public func makeCoordinator() -> Coordinator { Coordinator(store: store) }
+    public func makeCoordinator() -> Coordinator { Coordinator() }
 
-    public func makeNSView(context: Context) -> ConsoleTerminalView {
-        let view = ConsoleTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 520), font: font)
-        apply(palette, to: view)
-        context.coordinator.palette = palette
-        // Selection and copy remain native; plain clicks reach the program through Herdr (onClick).
-        view.allowMouseReporting = false
-        // Option types what the keyboard layout gives it (@, #, €…), as in Terminal; the word-wise
-        // and line-wise keys get their sequences from installInteractions.
-        view.optionAsMetaKey = false
-        view.terminalDelegate = context.coordinator
-        // Herdr keeps the history and paints whatever part of it is shown, so the view keeps none:
-        // lines a resize pushed out would only be a stale copy to scroll into, hiding live output.
-        view.getTerminal().changeHistorySize(0)
-        view.onScroll = { [weak store] up, lines in store?.scroll(up: up, lines: lines) }
-        view.onClick = { [weak store] column, row in store?.click(column: column, row: row) }
-        view.installInteractions()
-        store.display = { [weak view] frame in view?.show(frame) }
-        store.resetDisplay = { [weak view] in view?.resetScreen() }
-        store.resize(columns: view.getTerminal().cols, rows: view.getTerminal().rows)
-        store.open()
-        context.coordinator.sight = TerminalSight(view: view) { [weak store, weak view] visible in
-            store?.setVisible(visible)
-            if visible { view?.scanDeferredResources() }
-        }
-        view.onWindowChange = { [weak sight = context.coordinator.sight] in sight?.update() }
-        return view
-    }
+    public func makeNSView(context: Context) -> TerminalContainer { TerminalContainer() }
 
-    public func updateNSView(_ view: ConsoleTerminalView, context: Context) {
+    public func updateNSView(_ container: TerminalContainer, context: Context) {
+        let view = holder.view
         view.openLink = openLink
         view.resolveFile = resolveFile
         view.resolveSession = resolveSession
         view.onResources = onResources
         view.onDropFiles = onDropFiles
+        if holder.palette != palette {
+            holder.palette = palette
+            Self.apply(palette, to: view)
+        }
+        if view.font != font { view.font = font }
+        if view.superview !== container {
+            container.subviews.forEach { $0.removeFromSuperview() }
+            view.removeFromSuperview()
+            container.addSubview(view)
+            container.needsLayout = true
+            context.coordinator.holder = holder
+            holder.mounted()
+        }
+        // Shown, it takes the keyboard, as it does when asked to.
         if context.coordinator.focusRequest != focusRequest {
             context.coordinator.focusRequest = focusRequest
             DispatchQueue.main.async { [weak view] in view?.window?.makeFirstResponder(view) }
         }
-        if context.coordinator.palette != palette {
-            context.coordinator.palette = palette
-            apply(palette, to: view)
-        }
-        if view.font != font { view.font = font }
     }
 
-    public static func dismantleNSView(_ view: ConsoleTerminalView, coordinator: Coordinator) {
-        coordinator.sight?.stop()
-        coordinator.sight = nil
-        view.onWindowChange = nil
-        view.removeInteractions()
-        coordinator.store.disconnect()
-        coordinator.store.display = nil
-        coordinator.store.resetDisplay = nil
-        view.terminalDelegate = nil
+    public static func dismantleNSView(_ container: TerminalContainer, coordinator: Coordinator) {
+        guard let holder = coordinator.holder, holder.view.superview === container else { return }
+        holder.view.removeFromSuperview()
+        holder.unmounted()
     }
 
-    private func apply(_ palette: TerminalPalette, to view: SwiftTerm.TerminalView) {
+    static func apply(_ palette: TerminalPalette, to view: SwiftTerm.TerminalView) {
         view.nativeBackgroundColor = palette.background
         view.nativeForegroundColor = palette.foreground
         view.caretColor = palette.caret
@@ -133,28 +191,43 @@ public struct TerminalSurface: NSViewRepresentable {
                                blue: UInt16(rgb.blueComponent * 65_535))
     }
 
-    @MainActor public final class Coordinator: NSObject, @preconcurrency TerminalViewDelegate {
-        let store: TerminalStore
-        var palette: TerminalPalette?
+    /// What one showing of the terminal remembers: the holder it shows, and the focus request it
+    /// last answered.
+    @MainActor public final class Coordinator {
+        weak var holder: TerminalHolder?
         var focusRequest: Int?
-        /// Whether anyone can see the terminal, which the store rests on while nobody does.
-        var sight: TerminalSight?
+    }
+
+    /// What SwiftTerm tells the terminal: sizes and keys go to the store.
+    @MainActor final class Delegate: NSObject, @preconcurrency TerminalViewDelegate {
+        let store: TerminalStore
         init(store: TerminalStore) { self.store = store }
-        public func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
+        func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
             if (source as? ConsoleTerminalView)?.applyingFrame != true { store.resize(columns: newCols, rows: newRows) }
         }
-        public func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) { store.send(.bytes(Data(data))) }
-        public func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
-        public func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
-        public func scrolled(source: SwiftTerm.TerminalView, position: Double) {}
+        func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) { store.send(.bytes(Data(data))) }
+        func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
+        func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
+        func scrolled(source: SwiftTerm.TerminalView, position: Double) {}
         /// SwiftTerm calls this for ⌘-clicks on links agents mark up explicitly (OSC 8).
-        public func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
+        func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
             guard let url = URL(string: link), ["https", "http"].contains(url.scheme?.lowercased()) else { return }
             (source as? ConsoleTerminalView)?.openLink?(url, true)
         }
-        public func bell(source: SwiftTerm.TerminalView) {}
-        public func clipboardCopy(source: SwiftTerm.TerminalView, content: Data) {}
-        public func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {}
+        func bell(source: SwiftTerm.TerminalView) {}
+        func clipboardCopy(source: SwiftTerm.TerminalView, content: Data) {}
+        func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {}
+    }
+}
+
+/// Where a terminal's view is shown. It takes the container's size only once the container has
+/// one: until then it keeps the size it had, so Herdr isn't told to shrink the terminal to nothing
+/// on its way back to the screen.
+public final class TerminalContainer: NSView {
+    public override func layout() {
+        super.layout()
+        guard bounds.width > 1, bounds.height > 1 else { return }
+        for view in subviews where view.frame != bounds { view.frame = bounds }
     }
 }
 
@@ -612,6 +685,9 @@ public final class ConsoleTerminalView: SwiftTerm.TerminalView {
         keyMonitor = nil
         mouseMonitor = nil
         scrollMonitor = nil
+        for area in trackingAreas where area.owner === linkTracker { removeTrackingArea(area) }
+        linkTracker = nil
+        unregisterDraggedTypes()
     }
 
     /// Keys that edit the line as they do in macOS text fields, sent as the Meta (Escape-prefixed)

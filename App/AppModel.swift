@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import ShepherdrCore
 import ShepherdrDictation
+import ShepherdrTerminalUI
 
 enum Destination: Hashable {
     case overview
@@ -1034,22 +1035,104 @@ final class AppModel {
         row.isStale || row.agent.state == .working ? [] : background.commands[row.id] ?? []
     }
 
-    /// Once a minute, lets go of the pages of browser tabs nobody has looked at in a while, in every
-    /// session's browser, the overview's and Compass's. They load again when shown.
-    func watchBrowsers() async {
+    // MARK: What stays of sessions out of sight
+
+    /// Somewhere you go back to, for how much what it keeps is worth keeping.
+    private enum CachePlace: Hashable {
+        case session(Agent.ID), compass, overview
+    }
+
+    /// Terminals kept while their sessions are out of sight, with what they last showed.
+    @ObservationIgnored private var terminals: [Agent.ID: TerminalHolder] = [:]
+    @ObservationIgnored private var interest: [CachePlace: SessionCache.Interest] = [:]
+    @ObservationIgnored private var memoryPressure = SessionCache.Pressure.normal
+    @ObservationIgnored private var pressureSource: DispatchSourceMemoryPressure?
+
+    /// The session's terminal: the one kept since it was last shown, or a new one, which connects
+    /// once it is.
+    func terminal(for context: SessionContext, mode: TerminalMode) -> TerminalHolder {
+        let id = Agent.ID(machineID: context.machine.id, terminalID: context.target.terminalID)
+        if let holder = terminals[id], holder.store.target == context.target { return holder }
+        terminals.removeValue(forKey: id)?.close()
+        let defaults = UserDefaults.standard
+        let size = defaults.double(forKey: "terminalFontSize")
+        let font = ConsoleFonts.font(family: defaults.string(forKey: "terminalFontFamily") ?? ConsoleFonts.defaultFamily,
+                                     size: size > 0 ? size : 13, ligatures: defaults.bool(forKey: ConsoleFonts.ligaturesKey))
+        let holder = TerminalHolder(store: TerminalStore(target: context.target, mode: mode), palette: Theme.terminal, font: font)
+        terminals[id] = holder
+        return holder
+    }
+
+    /// Detaches every terminal, as Shepherdr quits.
+    func closeTerminals() {
+        for holder in terminals.values { holder.close() }
+        terminals = [:]
+    }
+
+    /// Where you are counts as a visit: what it keeps is worth keeping a little longer.
+    private func noteInterest(now: Date = Date()) {
+        let place: CachePlace = switch (mode, selection) {
+        case (.compass, _): .compass
+        case (_, .overview): .overview
+        case (_, .session(let id)): .session(id)
+        }
+        interest[place, default: .init()].visit(at: now)
+        trimCaches(now: now)
+    }
+
+    /// Lets go of what is least worth keeping, when there is more than its limit for how short of
+    /// memory macOS is: terminals of the sessions you go back to least, then their pages, which
+    /// load again when shown. What is on screen, Compass's and the sessions that need you stay.
+    /// Terminals of sessions Herdr no longer shows go at once.
+    func trimCaches(now: Date = Date()) {
+        func score(_ place: CachePlace) -> Double { interest[place]?.score(at: now) ?? 0 }
+        var kept = Set(cluster.agents.filter { !$0.isStale && $0.agent.state == .blocked }.map(\.id))
+        if let id = compass.terminal { kept.insert(id) }
+        for (id, holder) in terminals where context(for: id) == nil && !holder.isShown {
+            terminals.removeValue(forKey: id)?.close()
+        }
+        let terminalItems = terminals.map { id, holder in
+            SessionCache.Item(id: id, isLoaded: true, isKept: holder.isShown || kept.contains(id),
+                              interest: score(.session(id)), lastShown: holder.lastShown)
+        }
+        for id in SessionCache.toRelease(terminalItems, limit: SessionCache.terminalLimit(memoryPressure)) {
+            terminals.removeValue(forKey: id)?.close()
+        }
+
+        let browsers = workspaces.map { ($0.value.browser, CachePlace.session($0.key)) }
+            + [(overviewBrowser, .overview), (compass.browser, .compass)]
+        let tabs = browsers.flatMap { browser, place in browser.tabs.map { ($0, score(place)) } }
+        let pageItems = tabs.map { tab, interest in
+            SessionCache.Item(id: tab.id, isLoaded: tab.holdsPage, isKept: tab.isShown || !tab.canUnload,
+                              interest: interest, lastShown: tab.lastShown)
+        }
+        let unloading = Set(SessionCache.toRelease(pageItems, limit: SessionCache.pageLimit(memoryPressure)))
+        for (tab, _) in tabs where unloading.contains(tab.id) { tab.unload() }
+    }
+
+    /// Keeps what stays of sessions within bounds: when macOS says it is short of memory, and once
+    /// a minute, as sessions come to need you or close.
+    func watchCaches() async {
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical], queue: .main)
+        pressureSource = source
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.memoryPressureChanged() }
+        }
+        source.activate()
+        defer {
+            source.cancel()
+            pressureSource = nil
+        }
         while !Task.isCancelled {
             do { try await Task.sleep(for: .seconds(60)) } catch { return }
-            unloadIdlePages()
+            trimCaches()
         }
     }
 
-    func unloadIdlePages(now: Date = Date()) {
-        let tabs = (workspaces.values.map(\.browser) + [overviewBrowser, compass.browser]).flatMap(\.tabs)
-        let pages = tabs.map {
-            PageUnloading.Page(id: $0.id, isLoaded: $0.holdsPage, isShown: $0.isShown, canUnload: $0.canUnload, lastShown: $0.lastShown)
-        }
-        let unloading = Set(PageUnloading.pages(toUnload: pages, now: now))
-        for tab in tabs where unloading.contains(tab.id) { tab.unload() }
+    private func memoryPressureChanged() {
+        guard let event = pressureSource?.data else { return }
+        memoryPressure = event.contains(.critical) ? .critical : event.contains(.warning) ? .warning : .normal
+        trimCaches()
     }
 
     /// Looks for commands agents left running every 10 seconds while the window shows, and as soon
@@ -1411,6 +1494,7 @@ final class AppModel {
 
     private func noteVisit() {
         if let currentPlace { visits.record(currentPlace) }
+        noteInterest()
     }
 
     /// What ⌘T offers for what was typed: Compass, every session and every shell, the one visited

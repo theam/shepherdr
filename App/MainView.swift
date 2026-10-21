@@ -62,7 +62,10 @@ struct MainView: View {
             await cluster.monitor()
         }
         .task { await model.watchBackgroundWork() }
-        .task { await model.watchBrowsers() }
+        .task { await model.watchCaches() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            model.closeTerminals()
+        }
         .onAppear { model.compass.start() }
         .onAppear { model.updates.start() }
         .onChange(of: refreshSeconds) { configureRefresh() }
