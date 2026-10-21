@@ -79,7 +79,7 @@ Sources/ShepherdrCore/
   Resources/AgentTools/           The shepherdr command and skill installed on each machine
   Resources/Updater/              The script that replaces the app with a new release
   Resources/Compass/              Compass's contract, page template, starter prompt and permissions
-Sources/ShepherdrTerminalUI/       Embeddable SwiftTerm AppKit terminal surface, palette and link handling
+Sources/ShepherdrTerminalUI/       Embeddable SwiftTerm AppKit terminal surface, the holder that keeps it across sessions, palette and link handling
 Sources/ShepherdrDictation/        On-device dictation: microphone capture and Parakeet transcription via FluidAudio
 Sources/ShepherdrProbe/            Read-only integration diagnostic
 Tests/ShepherdrCoreTests/          Protocol, transport and store regression tests

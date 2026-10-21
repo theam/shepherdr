@@ -11,7 +11,9 @@ struct SessionView: View {
     @Bindable var model: AppModel
     /// Survives switching sessions: the prompt editor's state and the browser's tabs.
     let workspace: SessionWorkspace
-    @ViewState<TerminalStore> private var terminal: TerminalStore
+    /// Kept by the model while the session is out of sight, with what it last showed.
+    private let holder: TerminalHolder
+    private var terminal: TerminalStore { holder.store }
     @ViewState<Bool> private var showDetails = false
     @ViewState<CGFloat> private var editorHeight: CGFloat = 60
     @AppStorage("terminalFontSize") private var fontSize = 13.0
@@ -26,7 +28,7 @@ struct SessionView: View {
         self.model = model
         self.isCompass = isCompass
         workspace = model.workspace(for: Agent.ID(machineID: context.machine.id, terminalID: context.target.terminalID))
-        _terminal = ViewState(initialValue: TerminalStore(target: context.target, mode: mode))
+        holder = model.terminal(for: context, mode: mode)
     }
 
     private var id: Agent.ID { .init(machineID: context.machine.id, terminalID: context.target.terminalID) }
@@ -60,9 +62,6 @@ struct SessionView: View {
             }
             await model.harvestResources(for: id)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-            terminal.disconnect()
-        }
     }
 
     private var workArea: some View {
@@ -70,7 +69,7 @@ struct SessionView: View {
             VStack(spacing: 0) {
                 banners
                 if context.canConnect {
-                    TerminalSurface(store: terminal, palette: Theme.terminal,
+                    TerminalSurface(holder: holder, palette: Theme.terminal,
                                     font: ConsoleFonts.font(family: fontFamily, size: fontSize, ligatures: ligatures),
                                     focusRequest: model.terminalFocusRequest,
                                     resolveFile: { [model, id] path in model.file(at: path, for: id) },

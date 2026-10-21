@@ -482,8 +482,8 @@ struct BrowserPanel: View {
 }
 
 /// Hosts a tab's web view. The view belongs to the tab, not to SwiftUI, so leaving a session
-/// detaches it without unloading the page; only a tab out of sight for a while lets it go
-/// (`AppModel.unloadIdlePages`).
+/// detaches it without unloading the page; only the tabs of the sessions you go back to least
+/// let it go, when there are too many or macOS is short of memory (`AppModel.trimCaches`).
 private struct WebViewHost: NSViewRepresentable {
     let webView: WKWebView
 
