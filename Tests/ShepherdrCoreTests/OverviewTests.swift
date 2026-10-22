@@ -12,40 +12,48 @@ struct OverviewTests {
         return AgentRow(agent: agent, machineName: machine, isStale: stale)
     }
 
+    /// Each row's status, as the engine works it out for rows on hold in `held`.
+    private func statuses(_ rows: [AgentRow], held: Set<String> = []) -> (AgentRow) -> SessionStatus {
+        { row in SessionStatus.of(OwnStatus(row), isHeld: held.contains(row.workspace)) }
+    }
+
     @Test func statesAndMachinesCombine() {
         let rows = [row("a", .blocked), row("b", .working), row("c", .working, on: "remote:forge"),
                     row("d", .idle, on: "remote:forge"), row("e", .working, on: "remote:mini", stale: true)]
+        let status = statuses(rows)
         var filter = SessionFilter()
-        #expect(rows.filter(filter.includes).count == 5)
+        func shown() -> [String] { rows.filter { filter.includes($0, status: status($0)) }.map(\.workspace) }
+        #expect(shown().count == 5)
         filter.toggle(.working)
-        #expect(rows.filter(filter.includes).map(\.workspace) == ["b", "c"])
+        #expect(shown() == ["b", "c"])
         filter.toggle(machine: "remote:forge")
-        #expect(rows.filter(filter.includes).map(\.workspace) == ["c"])
-        filter.toggle(.blocked)
-        #expect(rows.filter(filter.includes).map(\.workspace) == ["c"])
+        #expect(shown() == ["c"])
+        filter.toggle(.needsYou)
+        #expect(shown() == ["c"])
         filter.toggle(.working)
-        filter.toggle(.blocked)
-        #expect(rows.filter(filter.includes).map(\.workspace) == ["c", "d"])
+        filter.toggle(.needsYou)
+        #expect(shown() == ["c", "d"])
         // A machine that isn't answering shows its last known sessions, but not by state.
         filter = SessionFilter(machines: ["remote:mini"])
-        #expect(rows.filter(filter.includes).map(\.workspace) == ["e"])
+        #expect(shown() == ["e"])
         filter.toggle(.working)
-        #expect(rows.filter(filter.includes).isEmpty)
+        #expect(shown().isEmpty)
     }
 
     @Test func eachRowCountsWhatTheOtherRowChose() {
         let rows = [row("a", .blocked), row("b", .working), row("c", .working, on: "remote:forge"),
                     row("d", .idle, on: "remote:forge"), row("e", .working, on: "remote:mini", stale: true)]
+        let status = statuses(rows)
         var filter = SessionFilter(states: [.working])
-        #expect(filter.count(.working, in: rows) == 2)
-        #expect(filter.count(.blocked, in: rows) == 1)
-        #expect(filter.count(machine: "remote:forge", in: rows) == 1)
-        #expect(filter.count(machine: "remote:mini", in: rows) == 0)
+        #expect(filter.count(.working, in: rows, status: status) == 2)
+        #expect(filter.count(.needsYou, in: rows, status: status) == 1)
+        #expect(filter.count(machine: "remote:forge", in: rows, status: status) == 1)
+        #expect(filter.count(machine: "remote:mini", in: rows, status: status) == 0)
         filter = SessionFilter(machines: ["remote:forge"])
-        #expect(filter.count(.working, in: rows) == 1)
-        #expect(filter.count(.blocked, in: rows) == 0)
-        #expect(filter.count(machine: "local", in: rows) == 2)
-        #expect(filter.count(machine: "remote:mini", in: rows) == 1)
+        #expect(filter.count(.working, in: rows, status: status) == 1)
+        #expect(filter.count(.needsYou, in: rows, status: status) == 0)
+        #expect(filter.count(machine: "local", in: rows, status: status) == 2)
+        #expect(filter.count(machine: "remote:mini", in: rows, status: status) == 1)
         filter.keep(machines: ["local"])
         #expect(filter.isEmpty)
     }
@@ -53,25 +61,26 @@ struct OverviewTests {
     @Test func sessionsOnHoldCountAsOnHoldUnlessTheirAgentWorksOrNeedsYou() {
         let rows = [row("planner", .done), row("lead", .idle, on: "remote:forge"), row("busy", .working), row("asks", .blocked),
                     row("free", .done), row("old", .idle, on: "remote:mini", stale: true)]
-        let held: Set<Agent.ID> = Set(["planner", "lead", "busy", "asks", "old"].compactMap { name in rows.first { $0.workspace == name }?.id })
+        let status = statuses(rows, held: ["planner", "lead", "busy", "asks", "old"])
         var filter = SessionFilter()
-        #expect(filter.countOnHold(in: rows, held: held) == 2)
-        #expect(filter.count(.done, in: rows, held: held) == 1)
-        #expect(filter.count(.idle, in: rows, held: held) == 0)
-        #expect(filter.count(.working, in: rows, held: held) == 1)
-        #expect(filter.count(.blocked, in: rows, held: held) == 1)
+        #expect(filter.count(.waiting, in: rows, status: status) == 2)
+        #expect(filter.count(.done, in: rows, status: status) == 1)
+        #expect(filter.count(.idle, in: rows, status: status) == 0)
+        #expect(filter.count(.working, in: rows, status: status) == 1)
+        #expect(filter.count(.needsYou, in: rows, status: status) == 1)
 
-        filter.toggleOnHold()
+        func shown() -> [String] { rows.filter { filter.includes($0, status: status($0)) }.map(\.workspace) }
+        filter.toggle(.waiting)
         #expect(!filter.isEmpty)
-        #expect(rows.filter { filter.includes($0, held: held) }.map(\.workspace) == ["planner", "lead"])
+        #expect(shown() == ["planner", "lead"])
         filter.toggle(.done)
-        #expect(rows.filter { filter.includes($0, held: held) }.map(\.workspace) == ["planner", "lead", "free"])
+        #expect(shown() == ["planner", "lead", "free"])
         filter.toggle(machine: "remote:forge")
-        #expect(rows.filter { filter.includes($0, held: held) }.map(\.workspace) == ["lead"])
-        #expect(filter.countOnHold(in: rows, held: held) == 1)
-        #expect(filter.count(machine: "local", in: rows, held: held) == 2)
-        // Without holds, they count by their agents' states, as before.
-        #expect(SessionFilter().count(.done, in: rows) == 2)
+        #expect(shown() == ["lead"])
+        #expect(filter.count(.waiting, in: rows, status: status) == 1)
+        #expect(filter.count(machine: "local", in: rows, status: status) == 2)
+        // Without holds, they count by their agents' states.
+        #expect(SessionFilter().count(.done, in: rows, status: statuses(rows)) == 2)
     }
 
     @Test func foldersInUseComeMostUsedFirstWithoutWorktrees() {

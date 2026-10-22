@@ -342,6 +342,53 @@ import Testing
         }
     }
 
+    @Test func phasesAreRememberedAndChangesWaitToReachHerdr() throws {
+        try withDefaults { defaults in
+            let relations = SessionRelationStore(defaults: defaults)
+            relations.setWaiting(planner, for: research, true)
+            relations.setWaiting(planner, for: tests, true)
+            #expect(relations.isHeld(planner))
+            #expect(relations.unsynced == [planner])
+            relations.markSynced(planner)
+            relations.setHolds([Hold(awaited: research, phase: .finished), Hold(awaited: tests, phase: .started)], for: planner)
+            #expect(relations.phase(of: planner, for: research) == .finished)
+            #expect(relations.isHeld(planner))
+            #expect(relations.unsynced == [planner])
+            // Waiting again keeps how far it got.
+            relations.setWaiting(planner, for: research, true)
+            #expect(relations.phase(of: planner, for: research) == .finished)
+
+            let reopened = SessionRelationStore(defaults: defaults)
+            #expect(reopened.holds[planner] == [Hold(awaited: research, phase: .finished), Hold(awaited: tests, phase: .started)])
+            #expect(reopened.unsynced == [planner])
+            reopened.setHolds([Hold(awaited: tests, phase: .finished)], for: planner)
+            #expect(!reopened.isHeld(planner))
+            reopened.markSynced(planner)
+            // Holds read back from Herdr are already there.
+            reopened.setHolds([Hold(awaited: planner)], for: research, fromHerdr: true)
+            #expect(reopened.unsynced.isEmpty)
+            // A closed session's own tokens went with it; its waiters' change.
+            reopened.forget(planner)
+            #expect(reopened.unsynced == [research])
+            #expect(SessionRelationStore(defaults: defaults).unsynced == [research])
+        }
+    }
+
+    @Test func holdsChangingTellTheirListener() throws {
+        try withDefaults { defaults in
+            let relations = SessionRelationStore(defaults: defaults)
+            var changes = 0
+            relations.onChange = { changes += 1 }
+            relations.setWaiting(planner, for: research, true)
+            relations.setWaiting(planner, for: research, true)
+            relations.setCollapsed(planner, true)
+            relations.markSynced(planner)
+            #expect(changes == 1)
+            relations.forget(research)
+            #expect(changes == 2)
+        }
+    }
+
     @Test func invalidOrDuplicatedRecordsAreDropped() throws {
         try withDefaults { defaults in
             let json = """
@@ -352,6 +399,8 @@ import Testing
             """
             defaults.set(Data(json.utf8), forKey: SessionRelationStore.storageKey)
             #expect(SessionRelationStore(defaults: defaults).waits == [planner: [research]])
+            // Saved before phases: already waited for, so a session that is free now has finished.
+            #expect(SessionRelationStore(defaults: defaults).holds[planner] == [Hold(awaited: research, phase: .started)])
             defaults.set(Data("not JSON".utf8), forKey: SessionRelationStore.storageKey)
             #expect(SessionRelationStore(defaults: defaults).waits.isEmpty)
         }

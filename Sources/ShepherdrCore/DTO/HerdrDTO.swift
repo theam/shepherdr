@@ -225,6 +225,11 @@ enum HerdrJSON {
         for agent in dto.agents where doorbells[agent.terminalId] == nil {
             if let bell = agent.tokens?[Self.doorbellToken], Letter.isValidID(bell) { doorbells[agent.terminalId] = bell }
         }
+        var tokens: [String: [String: String]] = [:]
+        for (terminal, list) in dto.agents.map({ ($0.terminalId, $0.tokens) }) + dto.panes.map({ ($0.terminalId, $0.tokens) }) {
+            let own = (list ?? [:]).filter { $0.key.hasPrefix("shepherdr-") }
+            if !own.isEmpty { tokens[terminal, default: [:]].merge(own) { _, pane in pane } }
+        }
         return MachineSnapshot(version: dto.version, protocolVersion: dto.protocol,
             workspaces: dto.workspaces.map { item in
                 Workspace(id: item.workspaceId, name: item.label.nonempty ?? item.workspaceId,
@@ -238,7 +243,7 @@ enum HerdrJSON {
                              title: agents.first { $0.id.terminalID == pane.terminalId }?.name
                                 ?? "\(tabs[pane.tabId]?.label.nonempty ?? pane.tabId) · \(pane.paneId)",
                              directory: pane.foregroundCwd?.nonempty ?? pane.cwd?.nonempty)
-            }, doorbells: doorbells)
+            }, doorbells: doorbells, tokens: tokens)
     }
 
     private static func requireUnique(_ ids: [String], resource: String) throws {

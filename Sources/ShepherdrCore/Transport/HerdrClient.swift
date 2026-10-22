@@ -29,6 +29,10 @@ public protocol HerdrClient: Sendable {
     /// waiting at its prompt; nil when Herdr doesn't say.
     func runsCommand(paneID: String, on machine: Machine) async throws -> Bool?
 
+    /// Sets and clears Shepherdr's own tokens on a pane, at most 16 in one go; Herdr keeps 80
+    /// characters of each value.
+    func reportTokens(paneID: String, set: [String: String], clear: [String], on machine: Machine) async throws
+
     /// Submits a prompt to the agent in a pane, as typing it and pressing Return would.
     func prompt(paneID: String, text: String, on machine: Machine) async throws
 
@@ -49,6 +53,7 @@ extension HerdrClient {
     public func checkouts(around workspaceID: String, on machine: Machine) async throws -> [String: WorkspaceCheckout] { throw unsupported }
     public func shellPID(paneID: String, on machine: Machine) async throws -> Int? { throw unsupported }
     public func runsCommand(paneID: String, on machine: Machine) async throws -> Bool? { throw unsupported }
+    public func reportTokens(paneID: String, set: [String: String], clear: [String], on machine: Machine) async throws { throw unsupported }
     public func prompt(paneID: String, text: String, on machine: Machine) async throws { throw unsupported }
     public func startAgent(_ name: String, kind: String, paneID: String, on machine: Machine) async throws -> String? { throw unsupported }
 }

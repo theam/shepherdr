@@ -42,29 +42,27 @@ struct HoldsTests {
         #expect(missing.isEmpty)
     }
 
-    @Test func aShellsHoldEndsWhenItsCommandIsBackAtThePrompt() {
+    @Test func aShellRunsUntilItsCommandIsBackAtThePrompt() {
         var run = ShellRun()
-        func see(_ running: Bool, _ output: String?) -> Bool { run.see(running: running, output: output) }
-        #expect(!see(false, "~ $ "))
-        #expect(!see(true, nil))
-        #expect(run.isRunning)
-        #expect(!see(true, nil))
-        #expect(see(false, "~ $ ./deploy.sh\ndone\n~ $ "))
-        #expect(!run.isRunning)
+        #expect(run.see(running: false, output: "~ $ ") == .atPrompt)
+        #expect(run.see(running: true, output: nil) == .running)
+        #expect(run.see(running: true, output: nil) == .running)
+        // Back at its prompt: the hold, which saw it start, tells it finished.
+        #expect(run.see(running: false, output: nil) == .atPrompt)
     }
 
-    @Test func aCommandThatFinishedBetweenTwoLooksStillEndsIt() {
+    @Test func aCommandThatFinishedBetweenTwoLooksShowsAsFinished() {
         var run = ShellRun()
-        func see(_ running: Bool, _ output: String?) -> Bool { run.see(running: running, output: output) }
-        #expect(!see(false, "~ $ \n\n"))
+        #expect(run.see(running: false, output: "~ $ \n\n") == .atPrompt)
         // Typing at the prompt only changes its last line.
-        #expect(!see(false, "~ $ ./depl"))
-        #expect(see(false, "~ $ ./deploy.sh\ndeployed\n~ $ "))
+        #expect(run.see(running: false, output: "~ $ ./depl") == .atPrompt)
+        #expect(run.see(running: false, output: "~ $ ./deploy.sh\ndeployed\n~ $ ") == .finished)
+        #expect(run.see(running: false, output: "~ $ ./deploy.sh\ndeployed\n~ $ ") == .finished)
 
         // Without its output, an idle shell can't tell.
         var blind = ShellRun()
-        let first = blind.see(running: false, output: nil), second = blind.see(running: false, output: nil)
-        #expect(!first && !second)
+        blind.see(running: false, output: nil)
+        #expect(blind.see(running: false, output: nil) == .atPrompt)
     }
 
     @Test func processInfoSaysWhetherTheShellRunsACommand() throws {

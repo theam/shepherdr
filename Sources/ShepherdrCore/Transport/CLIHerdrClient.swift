@@ -189,6 +189,16 @@ public struct CLIHerdrClient: HerdrClient, HerdrTerminalClient {
         return nil
     }
 
+    public func reportTokens(paneID: String, set: [String: String], clear: [String], on machine: Machine) async throws {
+        try requireArgument(paneID, "pane")
+        guard !set.isEmpty || !clear.isEmpty else { return }
+        guard set.count + clear.count <= 16 else { throw HerdrFailure(.incompatible, "Herdr updates at most 16 tokens at once.") }
+        let prefix = machine.profileID.map { ["--machine", $0] } ?? []
+        let tokens = set.sorted { $0.key < $1.key }.flatMap { ["--token", "\($0.key)=\($0.value)"] }
+            + clear.sorted().flatMap { ["--clear-token", $0] }
+        try validate(try await execute(prefix + ["pane", "report-metadata", paneID, "--source", "shepherdr"] + tokens), machine: machine)
+    }
+
     public func prompt(paneID: String, text: String, on machine: Machine) async throws {
         try requireArgument(paneID, "pane")
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw HerdrFailure(.incompatible, "The prompt is empty.") }

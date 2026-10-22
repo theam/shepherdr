@@ -55,24 +55,14 @@ struct OverviewView: View {
     private var stateTiles: some View {
         let rows = model.agents
         let filter = model.sessionFilter
-        let held = model.heldSessions
-        let choosing = !filter.states.isEmpty || filter.onHold
         return HStack(spacing: 10) {
-            ForEach([AgentState.blocked, .working], id: \.self) { state in stateTile(state, rows: rows, held: held) }
-            // Waiting for others, whatever its agent's state says, unless it works or needs you.
-            StateTile(state: nil, count: filter.countOnHold(in: rows, held: held), isChosen: filter.onHold,
-                      isLeftOut: choosing && !filter.onHold) {
-                model.sessionFilter.toggleOnHold()
+            ForEach([SessionStatus.needsYou, .working, .waiting, .done, .idle], id: \.self) { state in
+                StateTile(state: state, count: filter.count(state, in: rows, status: model.status(of:)),
+                          isChosen: filter.states.contains(state),
+                          isLeftOut: !filter.states.isEmpty && !filter.states.contains(state)) {
+                    model.sessionFilter.toggle(state)
+                }
             }
-            ForEach([AgentState.done, .idle], id: \.self) { state in stateTile(state, rows: rows, held: held) }
-        }
-    }
-
-    private func stateTile(_ state: AgentState, rows: [AgentRow], held: Set<Agent.ID>) -> some View {
-        let filter = model.sessionFilter
-        return StateTile(state: state, count: filter.count(state, in: rows, held: held), isChosen: filter.states.contains(state),
-                         isLeftOut: (!filter.states.isEmpty || filter.onHold) && !filter.states.contains(state)) {
-            model.sessionFilter.toggle(state)
         }
     }
 
@@ -81,7 +71,7 @@ struct OverviewView: View {
         let filter = model.sessionFilter
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 10)], spacing: 10) {
             ForEach(machines) { state in
-                MachineTile(state: state, count: filter.count(machine: state.id, in: rows, held: model.heldSessions),
+                MachineTile(state: state, count: filter.count(machine: state.id, in: rows, status: model.status(of:)),
                             usage: model.usageMonitor.usage[state.id], isChosen: filter.machines.contains(state.id),
                             isLeftOut: !filter.machines.isEmpty && !filter.machines.contains(state.id)) {
                     model.sessionFilter.toggle(machine: state.id)
@@ -110,8 +100,8 @@ struct OverviewView: View {
         } else {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
                 ForEach(rows) { row in
-                    SessionCard(row: row, showsMachine: model.showsMachineNames, background: model.backgroundCommands(of: row),
-                                hold: SessionFilter.isOnHold(row, held: model.heldSessions) ? model.waitState(for: row.id) : nil) {
+                    SessionCard(row: row, status: model.status(of: row), showsMachine: model.showsMachineNames,
+                                background: model.backgroundCommands(of: row)) {
                         model.open(row.id)
                     }
                 }
@@ -158,14 +148,13 @@ private struct FilterTile: ViewModifier {
 }
 
 private struct StateTile: View {
-    /// Nil for sessions on hold.
-    let state: AgentState?
+    let state: SessionStatus
     let count: Int
     let isChosen: Bool
     let isLeftOut: Bool
     let toggle: () -> Void
 
-    private var accent: Color { state.map { Theme.color(for: $0) } ?? Theme.cyan }
+    private var accent: Color { Theme.color(for: state) }
 
     var body: some View {
         let color = count > 0 ? accent : Theme.faint
@@ -176,20 +165,17 @@ private struct StateTile: View {
                 Text(label).font(Theme.mono(10, .semibold)).tracking(1.5).foregroundStyle(isChosen ? Theme.text : Theme.dim)
             }
             .modifier(FilterTile(accent: accent, isChosen: isChosen, isLeftOut: isLeftOut,
-                                 isAlert: count > 0 && state == .blocked))
+                                 isAlert: count > 0 && state == .needsYou))
         }
         .buttonStyle(.plain)
         .help(isChosen ? "Stop showing only these sessions"
-                       : state == nil ? "Show only sessions on hold, waiting for others; choose more to add them"
-                                      : "Show only sessions in this state; choose more to add them")
+                       : state == .waiting ? "Show only sessions on hold, waiting for others; choose more to add them"
+                                           : "Show only sessions in this state; choose more to add them")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isChosen ? .isSelected : [])
     }
 
-    private var label: String {
-        guard let state else { return "ON HOLD" }
-        return state == .blocked ? "NEED YOU" : state.title.uppercased()
-    }
+    private var label: String { state == .needsYou ? "NEED YOU" : state.label.uppercased() }
 }
 
 /// A machine's sessions and how busy it is, to pick where the next agent goes.
@@ -332,28 +318,22 @@ final class MachineUsageMonitor {
 
 private struct SessionCard: View {
     let row: AgentRow
+    let status: SessionStatus
     let showsMachine: Bool
     let background: [BackgroundCommand]
-    /// Set while the session waits for others, as the queue shows it, instead of its agent's state.
-    let hold: WaitState?
     let open: () -> Void
     @ViewState<Bool> private var hovering = false
 
     var body: some View {
-        let color = hold.map(HoldTag.color) ?? Theme.color(for: row.agent.state, stale: row.isStale)
+        let color = Theme.color(for: status)
         Button(action: open) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Text(String(format: "%02d", row.manualPriority)).font(Theme.mono(10, .semibold)).foregroundStyle(Theme.faint)
-                    if let hold {
-                        Image(systemName: hold == .ready ? "hourglass.bottomhalf.filled" : "hourglass")
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(HoldTag.color(hold)).frame(width: 14)
-                    } else {
-                        StateGlyph(state: row.agent.state, stale: row.isStale, background: !background.isEmpty)
-                    }
+                    StateGlyph(status: status, background: !background.isEmpty)
                     Text(row.workspace).font(Theme.mono(13, .bold)).foregroundStyle(Theme.text).lineLimit(1)
                     Spacer(minLength: 4)
-                    if let hold, !row.isStale { HoldTag(state: hold) } else { StateTag(state: row.agent.state, stale: row.isStale) }
+                    StateTag(status: status)
                 }
                 Text(row.title).font(Theme.mono(11)).foregroundStyle(Theme.text.opacity(0.7)).lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -377,25 +357,6 @@ private struct SessionCard: View {
         .onHover { hovering = $0 }
         .opacity(row.isStale ? 0.6 : 1)
         .help("Open \(row.workspace)")
-    }
-}
-
-/// A session on hold: waiting while the sessions it waits for work or need you, ready once they finished.
-private struct HoldTag: View {
-    let state: WaitState
-
-    static func color(_ state: WaitState) -> Color { state == .ready ? Theme.phosphor : Theme.cyan }
-
-    var body: some View {
-        let color = Self.color(state)
-        Text(state == .ready ? "READY" : "ON HOLD")
-            .font(Theme.mono(10, .bold))
-            .tracking(1)
-            .foregroundStyle(color)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(color.opacity(0.35), lineWidth: 1))
-            .help(state == .ready ? "On hold; the sessions it waits for have finished" : "On hold, waiting for other sessions")
     }
 }
 

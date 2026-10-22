@@ -74,6 +74,7 @@ struct QuickSwitcher: View {
                         ForEach(Array(targets.enumerated()), id: \.element.id) { index, target in
                             SwitcherRow(target: target, isHighlighted: index == current, showsMachine: model.showsMachineNames,
                                         lastVisit: model.visits.visits[target.place],
+                                        status: { if case .session(let row) = target { model.status(of: row) } else { nil } }(),
                                         background: { if case .session(let row) = target { !model.backgroundCommands(of: row).isEmpty } else { false } }()) {
                                 model.switchTo(target)
                             }
@@ -95,6 +96,7 @@ private struct SwitcherRow: View {
     let isHighlighted: Bool
     let showsMachine: Bool
     let lastVisit: Date?
+    let status: SessionStatus?
     let background: Bool
     let choose: () -> Void
     @ViewState<Bool> private var hovering = false
@@ -133,8 +135,8 @@ private struct SwitcherRow: View {
         switch target {
         case .compass:
             Image(systemName: "safari").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.cyan)
-        case .session(let row):
-            StateGlyph(state: row.agent.state, stale: row.isStale, background: background)
+        case .session:
+            StateGlyph(status: status ?? .unknown, background: background)
         case .shell:
             Text("$").font(Theme.mono(12, .bold)).foregroundStyle(Theme.faint)
         }

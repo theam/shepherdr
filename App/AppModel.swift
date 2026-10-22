@@ -249,10 +249,6 @@ struct NewSessionDraft: Identifiable {
     var compass: FromCompass?
 }
 
-/// Whether a session on hold can resume: `ready` once none of the sessions it waits for is
-/// still working or needs attention.
-enum WaitState { case waiting, ready }
-
 /// Window-level navigation and composer state. Drafts and prompt history stay in memory only.
 @MainActor @Observable
 final class AppModel {
@@ -353,6 +349,7 @@ final class AppModel {
         checksMonitor.model = self
         courier.model = self
         compass.model = self
+        relations.onChange = { [weak self] in self?.settleStatuses() }
         presence.onChange { [weak self] onScreen in
             guard let self else { return }
             cluster.isOnScreen = onScreen
@@ -435,7 +432,7 @@ final class AppModel {
         let entries: [SessionOrderStore.Entry]
         let gathersProjects: Bool
         let collapsedProjects: Set<ProjectRunID>
-        let waits: [Agent.ID: [Agent.ID]]
+        let holds: [Agent.ID: [Hold]]
         let collapsedWaits: Set<Agent.ID>
         let checkouts: [String: WorkspaceCheckout]
         let selected: Agent.ID?
@@ -465,7 +462,7 @@ final class AppModel {
         let inputs = QueueInputs(agents: cluster.agents, machines: cluster.machines,
                                  compass: compass.isSetUp ? compass.terminal : nil, entries: order.entries,
                                  gathersProjects: order.gathersProjects, collapsedProjects: order.collapsedProjects,
-                                 waits: relations.waits, collapsedWaits: relations.collapsed, checkouts: cluster.checkouts,
+                                 holds: relations.holds, collapsedWaits: relations.collapsed, checkouts: cluster.checkouts,
                                  selected: selectedID)
         if inputs != derivedInputs {
             derivedInputs = inputs
@@ -482,11 +479,8 @@ final class AppModel {
     var rankedRows: [AgentRow] { memo(\.rankedRows) { order.ranked(agents, projects: gatheredProjects) } }
     /// The overview's sessions, in priority order: those in the chosen states and on the chosen machines.
     var overviewRows: [AgentRow] {
-        let held = heldSessions
-        return rankedRows.filter { sessionFilter.includes($0, held: held) }
+        rankedRows.filter { sessionFilter.includes($0, status: status(of: $0)) }
     }
-    /// Sessions waiting for others, which the overview shows as on hold.
-    var heldSessions: Set<Agent.ID> { Set(relations.waits.keys) }
 
     /// The queue as the sidebar shows it.
     var queue: [QueueItem] { memo(\.queue) { order.layout(agents, projects: gatheredProjects) } }
@@ -942,33 +936,121 @@ final class AppModel {
         waitPicking = WaitPicking(session: id)
     }
 
-    func waitState(for id: Agent.ID) -> WaitState? {
-        let awaited = relations.waitingFor(id)
-        guard !awaited.isEmpty else { return nil }
-        let busy = awaited.contains { other in
-            // A shell is waited for until its command finishes, which ends the hold on it.
-            guard let row = cluster.agentsByID[other] else { return shell(for: other).map { !$0.isStale } ?? false }
-            guard !row.isStale else { return false }
-            return row.agent.state == .working || row.agent.state == .blocked
-        }
-        return busy ? .waiting : .ready
-    }
-
     func row(for id: Agent.ID) -> AgentRow? { cluster.agentsByID[id] }
 
     /// A pane without an agent, by its ID.
     func shell(for id: Agent.ID) -> ShellRow? { allShells.first { $0.id == id } }
 
-    /// Shells sessions wait for, as last seen.
-    private(set) var shellRuns: [Agent.ID: ShellRun] = [:]
+    // MARK: Statuses
+
+    /// Every session's status, as `settleStatuses` last worked it out: views read it, and never work
+    /// it out themselves.
+    private(set) var statuses: [Agent.ID: SessionStatus] = [:]
+    @ObservationIgnored private var engine = StatusEngine()
+    @ObservationIgnored private var isSettling = false
+
+    /// A session's status; one not worked out yet, such as one that just appeared, by its own state.
+    func status(of row: AgentRow) -> SessionStatus {
+        statuses[row.id] ?? SessionStatus.of(OwnStatus(row), isHeld: relations.isHeld(row.id))
+    }
+
+    /// A session's or a shell's status; nil when Herdr doesn't show it.
+    func status(for id: Agent.ID) -> SessionStatus? {
+        if let status = statuses[id] { return status }
+        if let row = row(for: id) { return status(of: row) }
+        return shell(for: id).map { $0.isStale ? .stale : .shell }
+    }
+
+    /// Works statuses out again, from what Herdr shows and the holds as recorded, and moves holds
+    /// along. Only sessions whose own state changed, and the sessions waiting for them, are worked
+    /// out again. Runs after each refresh, each look at a shell and each change to holds.
+    func settleStatuses() {
+        guard !isSettling else { return }
+        isSettling = true
+        defer { isSettling = false }
+        let tokens = paneTokens
+        restoreHolds(tokens)
+        var own: [Agent.ID: OwnStatus] = [:]
+        for row in cluster.agents { own[row.id] = OwnStatus(row) }
+        for shell in allShells {
+            let activity = shellRuns[shell.id]?.activity ?? .atPrompt
+            own[shell.id] = OwnStatus(.shell(activity), isStale: shell.isStale)
+        }
+        let before = relations.holds
+        let after = engine.settle(own: own, holds: before)
+        for (waiter, holds) in after where holds != before[waiter] {
+            for hold in holds where hold.phase == .finished && before[waiter]?.first(where: { $0.awaited == hold.awaited })?.phase != .finished {
+                guard let shell = shell(for: hold.awaited) else { continue }
+                sessionNotices[waiter] = "\(shell.pane.workspaceName) finished its command."
+            }
+            relations.setHolds(holds, for: waiter)
+        }
+        if engine.statuses != statuses { statuses = engine.statuses }
+        mirrorHolds(tokens)
+    }
+
+    /// Shepherdr's tokens on each pane, by session.
+    private var paneTokens: [Agent.ID: [String: String]] {
+        var tokens: [Agent.ID: [String: String]] = [:]
+        for state in cluster.machines {
+            for (terminal, list) in state.snapshot?.tokens ?? [:] { tokens[Agent.ID(machineID: state.id, terminalID: terminal)] = list }
+        }
+        return tokens
+    }
+
+    private func paneID(of id: Agent.ID) -> String? { row(for: id)?.agent.paneID ?? shell(for: id)?.pane.paneID }
+
+    /// Holds this Mac has no record of, such as on a new Mac or after losing its settings, come back
+    /// from the tokens on their waiting sessions' panes. Holds dropped here and not yet cleared there
+    /// don't.
+    private func restoreHolds(_ tokens: [Agent.ID: [String: String]]) {
+        let online = Set(cluster.machines.filter { $0.connection == .online }.map(\.id))
+        let known = Set(cluster.machines.map(\.id))
+        for (waiter, list) in tokens where online.contains(waiter.machineID) && relations.holds[waiter] == nil
+            && !relations.unsynced.contains(waiter) && tokenWrites[waiter] == nil {
+            let holds = (HoldTokens.decode(list, waiter: waiter) ?? []).filter { known.contains($0.awaited.machineID) }
+            if !holds.isEmpty { relations.setHolds(holds, for: waiter, fromHerdr: true) }
+        }
+    }
+
+    /// What this Mac last asked Herdr to keep for each waiting session, until a refresh shows it there.
+    @ObservationIgnored private var tokenWrites: [Agent.ID: [String]] = [:]
+
+    /// Keeps each waiting session's holds as tokens on its pane, rewriting them from here whenever
+    /// they differ, and trying again after a refresh when Herdr didn't take them.
+    private func mirrorHolds(_ tokens: [Agent.ID: [String: String]]) {
+        let shown = tokens.filter { !HoldTokens.values(in: $0.value).isEmpty }.keys
+        for waiter in Set(relations.holds.keys).union(relations.unsynced).union(shown) {
+            guard cluster.machines.first(where: { $0.id == waiter.machineID })?.connection == .online,
+                  let paneID = paneID(of: waiter) else { continue }
+            let wanted = HoldTokens.encode(relations.holds[waiter] ?? [], waiter: waiter)
+            if HoldTokens.values(in: tokens[waiter] ?? [:]) == wanted {
+                tokenWrites[waiter] = nil
+                relations.markSynced(waiter)
+                continue
+            }
+            guard tokenWrites[waiter] != wanted else { continue }
+            tokenWrites[waiter] = wanted
+            var set: [String: String] = [:]
+            for (index, value) in wanted.enumerated() { set[HoldTokens.key(index)] = value }
+            let clear = Array(HoldTokens.keys.dropFirst(wanted.count))
+            Task {
+                let written = await cluster.reportTokens(paneID: paneID, set: set, clear: clear, onMachine: waiter.machineID)
+                if !written, tokenWrites[waiter] == wanted { tokenWrites[waiter] = nil }
+            }
+        }
+    }
+
+    /// Shells sessions wait for, as Shepherdr last saw them.
+    @ObservationIgnored private var shellRuns: [Agent.ID: ShellRun] = [:]
     /// When each session in a hold was first missing from its machine's snapshots.
     @ObservationIgnored private var missingSince: [Agent.ID: Date] = [:]
     @ObservationIgnored private var isCheckingShells = false
 
-    /// After each refresh: holds forget sessions that closed, wherever they were closed, and a hold on
-    /// a shell ends once the command it runs, such as a script, is back at the shell's prompt.
+    /// After each refresh: holds forget sessions that closed, wherever they were closed, statuses
+    /// are worked out again, and shells sessions wait for are looked at.
     func keepHolds() {
-        let held = Set(relations.waits.keys).union(relations.waits.values.joined())
+        let held = Set(relations.holds.keys).union(relations.holds.values.joined().map(\.awaited)).union(relations.unsynced)
         let gone = HoldUpkeep.gone(held, machines: cluster.machines, missingSince: &missingSince)
         for id in gone {
             for waiter in relations.waiters(of: id) where !gone.contains(waiter) {
@@ -976,31 +1058,36 @@ final class AppModel {
             }
             relations.forget(id)
         }
+        settleStatuses()
         checkShells()
     }
 
-    /// Looks at each shell a session waits for, one at a time, unless the last look is still going.
+    /// The shells Shepherdr looks at: those a session waits for, until that hold finishes. Nothing
+    /// else is asked about.
+    private func watchedShells() -> [ShellRow] {
+        let awaited = Set(relations.holds.values.joined().filter { $0.phase != .finished }.map(\.awaited))
+        guard !awaited.isEmpty else { return [] }
+        return allShells.filter { awaited.contains($0.id) && !$0.isStale }
+    }
+
+    /// Looks at each watched shell, one at a time, unless the last look is still going.
     private func checkShells() {
-        let shells = Set(relations.waits.values.joined()).filter { shell(for: $0) != nil }
-        let kept = shellRuns.filter { shells.contains($0.key) }
-        if kept.count != shellRuns.count { shellRuns = kept }
+        let shells = watchedShells()
+        let watched = Set(shells.map(\.id))
+        shellRuns = shellRuns.filter { watched.contains($0.key) }
         guard !shells.isEmpty, !isCheckingShells else { return }
         isCheckingShells = true
         Task {
             defer { isCheckingShells = false }
-            for id in shells.sorted(by: { ($0.machineID, $0.terminalID) < ($1.machineID, $1.terminalID) }) {
-                guard let shell = shell(for: id), !shell.isStale,
-                      let running = await cluster.runsCommand(paneID: shell.pane.paneID, onMachine: id.machineID) else { continue }
-                let output = running ? nil : await cluster.recentOutput(paneID: shell.pane.paneID, onMachine: id.machineID, lines: 40)
-                guard relations.waits.values.contains(where: { $0.contains(id) }) else { continue }
-                var run = shellRuns[id] ?? ShellRun()
-                let finished = run.see(running: running, output: output)
-                shellRuns[id] = finished ? nil : run
-                guard finished else { continue }
-                for waiter in relations.waiters(of: id) {
-                    relations.setWaiting(waiter, for: id, false)
-                    sessionNotices[waiter] = "\(shell.pane.workspaceName) finished its command, so this session no longer waits for it."
-                }
+            for shell in shells.sorted(by: { ($0.id.machineID, $0.id.terminalID) < ($1.id.machineID, $1.id.terminalID) }) {
+                guard let running = await cluster.runsCommand(paneID: shell.pane.paneID, onMachine: shell.id.machineID) else { continue }
+                let output = running ? nil : await cluster.recentOutput(paneID: shell.pane.paneID, onMachine: shell.id.machineID, lines: 40)
+                guard watchedShells().contains(where: { $0.id == shell.id }) else { continue }
+                var run = shellRuns[shell.id] ?? ShellRun()
+                run.see(running: running, output: output)
+                guard run != shellRuns[shell.id] else { continue }
+                shellRuns[shell.id] = run
+                settleStatuses()
             }
         }
     }

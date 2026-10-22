@@ -98,7 +98,7 @@ done_test() { passed=$((passed + 1)); }
 setup version
 run version
 expect_status 0
-expect_output "shepherdr 2 (protocol 1)"
+expect_output "shepherdr 4 (protocol 1)"
 run help
 expect_output "shepherdr spawn [options]"
 run skill

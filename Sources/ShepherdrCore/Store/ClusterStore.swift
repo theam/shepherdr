@@ -91,6 +91,13 @@ public final class ClusterStore {
         return try? await client.runsCommand(paneID: paneID, on: machine)
     }
 
+    /// Sets and clears Shepherdr's own tokens on a pane. Returns whether Herdr took them; the
+    /// next refresh shows them.
+    public func reportTokens(paneID: String, set: [String: String], clear: [String], onMachine id: String) async -> Bool {
+        guard let machine = try? machine(id) else { return false }
+        return (try? await client.reportTokens(paneID: paneID, set: set, clear: clear, on: machine)) != nil
+    }
+
     /// Submits a prompt to the agent in a pane. Herdr refuses while the agent asks a question.
     public func prompt(paneID: String, text: String, onMachine id: String) async throws {
         try await client.prompt(paneID: paneID, text: text, on: try machine(id))

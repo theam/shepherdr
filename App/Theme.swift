@@ -40,6 +40,16 @@ enum Theme {
         }
     }
 
+    static func color(for status: SessionStatus) -> Color {
+        switch status {
+        case .stale, .unknown: faint
+        case .needsYou: amber
+        case .working, .waiting, .running: cyan
+        case .done, .finished, .shell: phosphor
+        case .idle: dim
+        }
+    }
+
     static func color(for connection: ConnectionState) -> Color {
         switch connection {
         case .online: phosphor
@@ -228,46 +238,60 @@ struct PixelFace: View {
     }
 }
 
-/// A TUI-style lifecycle glyph: a braille spinner while working, a blinking alert when blocked.
+/// A TUI-style status glyph: a braille spinner while working, a blinking alert when it needs you,
+/// an hourglass on hold.
 struct StateGlyph: View {
-    let state: AgentState
-    var stale = false
+    let status: SessionStatus
     /// Whether the agent left commands running, such as a watcher: a slow clock instead of its state's mark.
     var background = false
     private static let spinner = Array("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     private static let clock = Array("◴◷◶◵")
 
     var body: some View {
+        let color = Theme.color(for: status)
         Group {
-            if stale {
-                Text("◌")
-            } else if background && state != .working && state != .blocked {
-                let color = NSColor(Theme.color(for: state))
-                FrameCycle(count: Self.clock.count, interval: 0.4, size: CGSize(width: 14, height: 16), key: "clock-\(state)") { tick, context in
+            switch status {
+            case .stale: Text("◌")
+            case .waiting: Image(systemName: "hourglass").font(.system(size: 11, weight: .semibold))
+            case _ where background && !status.isBusy:
+                FrameCycle(count: Self.clock.count, interval: 0.4, size: CGSize(width: 14, height: 16), key: "clock-\(status)") { tick, context in
                     FrameCycle.draw(String(Self.clock[tick]), in: context, size: CGSize(width: 14, height: 16),
-                                    font: ConsoleFonts.font(family: ConsoleFonts.defaultFamily, size: 13, weight: .bold), color: color)
+                                    font: ConsoleFonts.font(family: ConsoleFonts.defaultFamily, size: 13, weight: .bold), color: NSColor(color))
                 }
                 .frame(height: 16)
-            } else if state == .working || state == .blocked {
-                let working = state == .working
-                let color = NSColor(Theme.color(for: state))
-                FrameCycle(count: working ? Self.spinner.count : 2, interval: working ? 0.1 : 0.5,
-                           size: CGSize(width: 14, height: 16), key: state) { tick, context in
-                    let glyph = working ? String(Self.spinner[tick]) : "!"
+            case .working, .running, .needsYou:
+                let spins = status != .needsYou
+                FrameCycle(count: spins ? Self.spinner.count : 2, interval: spins ? 0.1 : 0.5,
+                           size: CGSize(width: 14, height: 16), key: "state-\(status)") { tick, context in
+                    let glyph = spins ? String(Self.spinner[tick]) : "!"
                     FrameCycle.draw(glyph, in: context, size: CGSize(width: 14, height: 16),
                                     font: ConsoleFonts.font(family: ConsoleFonts.defaultFamily, size: 12, weight: .bold),
-                                    color: working || tick == 0 ? color : color.withAlphaComponent(0.35))
+                                    color: spins || tick == 0 ? NSColor(color) : NSColor(color).withAlphaComponent(0.35))
                 }
                 .frame(height: 16)
-            } else {
-                Text(state == .done ? "✓" : state == .idle ? "○" : "?")
+            case .done, .finished: Text("✓")
+            case .idle: Text("○")
+            case .shell: Text("$")
+            case .unknown: Text("?")
             }
         }
         .font(Theme.mono(12, .bold))
-        .foregroundStyle(Theme.color(for: state, stale: stale))
+        .foregroundStyle(color)
         .frame(width: 14)
+        .help(Self.help(status))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(stale ? "\(state.title), stale" : background ? "\(state.title), with commands running" : state.title)
+        .accessibilityLabel(background ? "\(status.label), with commands running" : status.label)
+    }
+
+    static func help(_ status: SessionStatus) -> String {
+        switch status {
+        case .stale: "Its machine isn't answering: this is the last state it reported"
+        case .needsYou: "Herdr reports this agent needs attention"
+        case .waiting: "On hold, waiting for other sessions"
+        case .running: "Running a command"
+        case .finished: "Its command finished"
+        default: status.label.capitalized
+        }
     }
 }
 
@@ -300,19 +324,18 @@ struct BackgroundLabel: View {
 
 /// `[ WORKING ]`-style status badge.
 struct StateTag: View {
-    let state: AgentState
-    var stale = false
+    let status: SessionStatus
 
     var body: some View {
-        let color = Theme.color(for: state, stale: stale)
-        Text(stale ? "STALE" : state == .blocked ? "NEEDS YOU" : state.title.uppercased())
+        let color = Theme.color(for: status)
+        Text(status.label.uppercased())
             .font(Theme.mono(10, .bold))
             .tracking(1)
             .foregroundStyle(color)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 3))
             .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(color.opacity(0.35), lineWidth: 1))
-            .help(state == .blocked ? "Herdr reports this agent needs attention" : state.title)
+            .help(StateGlyph.help(status))
     }
 }
 

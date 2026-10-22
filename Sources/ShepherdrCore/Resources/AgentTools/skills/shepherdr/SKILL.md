@@ -39,7 +39,7 @@ It says which machine you are on and how each of the others is reached. Never gu
 
 - Leave out `--machine` for this machine. `--split right` or `--split down` opens it beside your pane instead of in a new workspace (this machine only).
 - `--cwd` defaults to your folder here, and to the home folder elsewhere. `shepherdr folders --machine NAME` lists the folders where sessions already work.
-- `--kind claude|codex|…` defaults to your own agent. `--shell` starts a plain shell.
+- `--kind claude|codex|…` defaults to your own agent. `--shell` starts a plain shell, only when the user asks for one: run builds, tests and scripts yourself, with your own tools, so their output comes back to you and no session is left behind.
 - `--name` is the new agent's Herdr name: a lowercase letter, then lowercase letters, digits, `-` or `_`. It is made up from the folder if you leave it out.
 - Shepherdr nests the new session under yours and keeps yours on hold until it finishes. Add `--no-wait` when you don't need its result.
 - In the prompt, ask it to hand its result back with `~/.shepherdr/bin/shepherdr handoff` when it finishes.

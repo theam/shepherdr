@@ -773,9 +773,8 @@ final class CompassController {
         let catalog = model.cluster.machines.map(\.machine)
         let names = MachineList.uniqueNames(catalog, macName: model.courier.tools.macName)
         for row in model.rankedRows {
-            let state = row.isStale ? "stale" : row.agent.state.rawValue
-            let label = row.isStale ? "stale" : row.agent.state == .blocked ? "needs you" : row.agent.state.rawValue
-            let info = ["state": state, "label": label]
+            let status = model.status(of: row)
+            let info = ["state": status.rawValue, "label": status.label]
             let machine = names[row.id.machineID]?.lowercased()
             for key in [row.name.lowercased(), row.workspace.lowercased()] where !key.isEmpty {
                 if sessions[key] == nil || row.id.machineID == Machine.local.id { sessions[key] = info }
@@ -929,7 +928,8 @@ final class CompassBridge: NSObject, WKScriptMessageHandler {
         'border:1px solid #1F2B25;font:500 10.5px ui-monospace,Menlo,monospace;color:#7E9488;vertical-align:middle;white-space:nowrap}' +
         '.shepherdr-state::before{content:"";width:6px;height:6px;border-radius:50%;background:#4B5E53}' +
         '.shepherdr-state[data-state=working]{color:#5CD6FF}.shepherdr-state[data-state=working]::before{background:#5CD6FF}' +
-        '.shepherdr-state[data-state=blocked]{color:#FFB547;border-color:rgba(255,181,71,.4)}.shepherdr-state[data-state=blocked]::before{background:#FFB547}' +
+        '.shepherdr-state[data-state=needsYou]{color:#FFB547;border-color:rgba(255,181,71,.4)}.shepherdr-state[data-state=needsYou]::before{background:#FFB547}' +
+        '.shepherdr-state[data-state=waiting]{color:#5CD6FF}.shepherdr-state[data-state=waiting]::before{background:transparent;border:1px solid #5CD6FF}' +
         '.shepherdr-state[data-state=done]{color:#4DFFA0}.shepherdr-state[data-state=done]::before{background:#4DFFA0}' +
         '.shepherdr-done{opacity:.5}.shepherdr-done .t,.shepherdr-done>.t{text-decoration:line-through}' +
         '[data-shepherdr=done][aria-pressed=true]{color:#4DFFA0;border-color:rgba(77,255,160,.6)}' +

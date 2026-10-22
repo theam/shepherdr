@@ -60,8 +60,8 @@ struct SessionSidebar: View {
 
     private var summaryLine: String {
         let live = model.agents.filter { !$0.isStale }
-        let working = live.filter { $0.agent.state == .working }.count
-        let blocked = live.filter { $0.agent.state == .blocked }.count
+        let working = live.filter { model.status(of: $0) == .working }.count
+        let blocked = live.filter { model.status(of: $0) == .needsYou }.count
         return blocked > 0 ? "\(blocked) need you · \(working) working" : "\(live.count) agent\(live.count == 1 ? "" : "s") · \(working) working"
     }
 
@@ -204,7 +204,7 @@ struct SessionSidebar: View {
     }
 
     private func shellRow(_ shell: ShellRow, grouped: Bool) -> some View {
-        ShellRowView(shell: shell, isGrouped: grouped, isSelected: model.selectedID == shell.id,
+        ShellRowView(shell: shell, status: (model.status(for: shell.id) ?? .shell).label, isGrouped: grouped, isSelected: model.selectedID == shell.id,
                      showsMachine: model.showsMachineNames) { model.open(shell.id) }
             .id(SidebarAnchor.shell(shell.id))
             .contextMenu {
@@ -345,7 +345,7 @@ private struct SessionRowView: View {
     /// A project's first session: a drop before it is drawn above the project's heading.
     private var opensProject: Bool { !isNested && run?.rows.first?.id == row.id }
 
-    private var accent: Color { row.agent.state == .blocked && !row.isStale ? Theme.amber : Theme.phosphor }
+    private var accent: Color { model.status(of: row) == .needsYou ? Theme.amber : Theme.phosphor }
 
     // Split into parts: one expression this size takes older compilers too long to type-check.
     var body: some View {
@@ -394,21 +394,12 @@ private struct SessionRowView: View {
         }
     }
 
-    @ViewBuilder private var stateMark: some View {
-        if let wait = model.waitState(for: row.id) {
-            // On hold: an hourglass replaces the agent's state until the session resumes.
-            Image(systemName: wait == .ready ? "hourglass.bottomhalf.filled" : "hourglass")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(wait == .ready ? Theme.phosphor : Theme.cyan)
-                .frame(width: 14)
-                .help(wait == .ready ? "On hold; the sessions it waits for have finished" : "On hold, waiting for other sessions")
-        } else {
-            StateGlyph(state: row.agent.state, stale: row.isStale, background: !model.backgroundCommands(of: row).isEmpty)
-        }
+    private var stateMark: some View {
+        StateGlyph(status: model.status(of: row), background: !model.backgroundCommands(of: row).isEmpty)
     }
 
     private var decorated: some View {
-        let selectionOpacity: Double = isSelected ? 1 : row.agent.state == .blocked && !row.isStale ? 0.6 : 0
+        let selectionOpacity: Double = isSelected ? 1 : model.status(of: row) == .needsYou ? 0.6 : 0
         let background: Color = isSelected ? Theme.raised : hovering ? Theme.raised.opacity(0.5) : .clear
         return content
             .padding(.leading, leading + CGFloat(tree.depth) * Self.indent).padding(.trailing, 8).padding(.vertical, 7)
@@ -520,7 +511,7 @@ private struct SessionRowView: View {
 
     private var accessibilityText: String {
         var text = isNested ? "" : "Priority \(row.manualPriority), "
-        text += "\(row.workspace), \(row.title), \(row.agent.state.title)"
+        text += "\(row.workspace), \(row.title), \(model.status(of: row).label)"
         if tree.nestedCount > 0 { text += ", waits for \(tree.nestedCount)" + (tree.isCollapsed ? ", hidden" : "") }
         let background = model.backgroundCommands(of: row)
         if !background.isEmpty { text += ", left running: " + background.map(\.command).joined(separator: ", ") }
@@ -667,8 +658,8 @@ private struct GroupHeaderView: View {
 
     var body: some View {
         let live = group.rows.filter { !$0.isStale }
-        let blocked = live.filter { $0.agent.state == .blocked }.count
-        let working = live.filter { $0.agent.state == .working }.count
+        let blocked = live.filter { model.status(of: $0) == .needsYou }.count
+        let working = live.filter { model.status(of: $0) == .working }.count
         let receiving = hint == .into(group: group.id)
         let count = group.rows.count + model.shells(in: group.group).count
         HStack(spacing: 7) {
@@ -752,8 +743,8 @@ private struct ProjectHeaderView: View {
 
     var body: some View {
         let live = run.rows.filter { !$0.isStale }
-        let blocked = live.filter { $0.agent.state == .blocked }.count
-        let working = live.filter { $0.agent.state == .working }.count
+        let blocked = live.filter { model.status(of: $0) == .needsYou }.count
+        let working = live.filter { model.status(of: $0) == .working }.count
         let containsSelection = model.selectedID.map { id in run.rows.contains { $0.id == id } } == true
         HStack(spacing: 6) {
             Text(run.isCollapsed ? "▸" : "▾").font(Theme.mono(10, .bold))
@@ -977,6 +968,7 @@ private struct QueueDropDelegate: DropDelegate {
 
 private struct ShellRowView: View {
     let shell: ShellRow
+    let status: String
     /// Grouped shells are indented under their group's header, like its sessions.
     let isGrouped: Bool
     let isSelected: Bool
@@ -989,7 +981,7 @@ private struct ShellRowView: View {
                 .frame(width: 30, alignment: .trailing)
             VStack(alignment: .leading, spacing: 2) {
                 Text(shell.pane.workspaceName).font(Theme.mono(11.5, .medium)).foregroundStyle(Theme.text.opacity(0.8)).lineLimit(1)
-                Text(showsMachine ? "shell @\(shell.machine.name)" : "shell")
+                Text(showsMachine ? "\(status) @\(shell.machine.name)" : status)
                     .font(Theme.mono(10)).foregroundStyle(Theme.faint).lineLimit(1)
             }
             Spacer(minLength: 0)

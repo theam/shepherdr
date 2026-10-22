@@ -118,9 +118,9 @@ struct SessionView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
             if let agent = context.agent {
-                StateGlyph(state: agent.agent.state, stale: agent.isStale, background: !model.backgroundCommands(of: agent).isEmpty)
+                StateGlyph(status: model.status(of: agent), background: !model.backgroundCommands(of: agent).isEmpty)
             } else {
-                Text("$").font(Theme.mono(13, .bold)).foregroundStyle(Theme.phosphor)
+                StateGlyph(status: model.status(for: id) ?? .shell)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
@@ -143,7 +143,7 @@ struct SessionView: View {
                         .font(Theme.mono(10)).foregroundStyle(Theme.dim).frame(maxWidth: 220, alignment: .trailing)
                 }
                 AgentMark(program: agent.agent.program, style: .tag)
-                StateTag(state: agent.agent.state, stale: agent.isStale)
+                StateTag(status: model.status(of: agent))
             }
             Button { model.showFolder(of: id) } label: { Image(systemName: "folder").font(.system(size: 10.5, weight: .semibold)) }
                 .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
@@ -419,7 +419,7 @@ struct RelationsPanel: View {
         if !awaited.isEmpty || !waiters.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 if !awaited.isEmpty {
-                    line(model.waitState(for: id) == .ready ? "READY · WAITED FOR" : "ON HOLD · WAITING FOR",
+                    line(model.relations.isHeld(id) ? "ON HOLD · WAITING FOR" : "WAITED FOR, FINISHED",
                          ids: awaited, removable: true) {
                         Button { picking = true } label: { Text("+").font(Theme.mono(11, .bold)).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
@@ -461,19 +461,19 @@ struct RelationsPanel: View {
     private func chip(_ other: Agent.ID, removable: Bool) -> some View {
         let row = model.row(for: other)
         let shell = row == nil ? model.shell(for: other) : nil
+        let status = model.status(for: other)
         return HStack(spacing: 6) {
-            if let row {
-                StateGlyph(state: row.agent.state, stale: row.isStale, background: !model.backgroundCommands(of: row).isEmpty)
+            if let row, let status {
+                StateGlyph(status: status, background: !model.backgroundCommands(of: row).isEmpty)
                 Text(row.workspace).foregroundStyle(Theme.text)
                 if model.showsMachineNames { Text("@\(row.machineName)").foregroundStyle(Theme.faint) }
-                Text(row.agent.state == .blocked ? "needs you" : row.agent.state.title.lowercased())
-                    .foregroundStyle(Theme.dim)
-            } else if let shell {
+                Text(status.label).foregroundStyle(Theme.dim)
+            } else if let shell, let status {
                 // Waited for until its command finishes, which ends the wait.
-                Text("$").foregroundStyle(Theme.faint)
+                StateGlyph(status: status)
                 Text(shell.pane.workspaceName).foregroundStyle(Theme.text)
                 if model.showsMachineNames { Text("@\(shell.machine.name)").foregroundStyle(Theme.faint) }
-                Text(model.shellRuns[other]?.isRunning == true ? "running" : "shell").foregroundStyle(Theme.dim)
+                Text(status.label).foregroundStyle(Theme.dim)
             } else {
                 Text("◌").foregroundStyle(Theme.faint)
                 Text("session gone").foregroundStyle(Theme.faint)
@@ -602,7 +602,7 @@ struct WaitForPicker: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(matches.enumerated()), id: \.element.id) { index, row in
-                        PickerRow(row: row, isHighlighted: index == current, isWaited: model.relations.isWaiting(id, for: row.id),
+                        PickerRow(row: row, status: model.status(of: row), isHighlighted: index == current, isWaited: model.relations.isWaiting(id, for: row.id),
                                   showsMachine: model.showsMachineNames,
                                   background: !model.backgroundCommands(of: row).isEmpty) { toggle(row) }
                             .id(row.id)
@@ -628,6 +628,7 @@ struct WaitForPicker: View {
 /// One session the picker offers: its state, name, machine and task, and ✓ when it is waited for.
 private struct PickerRow: View {
     let row: AgentRow
+    let status: SessionStatus
     let isHighlighted: Bool
     let isWaited: Bool
     let showsMachine: Bool
@@ -638,7 +639,7 @@ private struct PickerRow: View {
     var body: some View {
         Button(action: choose) {
             HStack(alignment: .top, spacing: 8) {
-                StateGlyph(state: row.agent.state, stale: row.isStale, background: background)
+                StateGlyph(status: status, background: background)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(row.workspace).font(Theme.mono(12, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
@@ -662,7 +663,7 @@ private struct PickerRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(isWaited ? "Stop waiting for \(row.workspace)" : "Wait for \(row.workspace)")
-        .accessibilityLabel("\(row.workspace), \(row.agent.state.title)\(isWaited ? ", waited for" : "")")
+        .accessibilityLabel("\(row.workspace), \(status.label)\(isWaited ? ", waited for" : "")")
         .accessibilityAddTraits(isWaited ? .isSelected : [])
     }
 }
