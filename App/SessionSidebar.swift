@@ -22,6 +22,8 @@ struct SessionSidebar: View {
         .background(Theme.panel)
         .alert(groupPromptTitle, isPresented: Binding { model.groupPrompt != nil } set: { if !$0 { model.groupPrompt = nil } }) {
             TextField("Group name", text: Binding { model.groupPrompt?.name ?? "" } set: { model.groupPrompt?.name = $0 })
+                // A field of its own for each prompt, as Rename Session's: a reused one may start empty.
+                .id(model.groupPrompt?.id)
             Button(isRenaming ? "Rename" : "Create") { model.commitGroupPrompt() }
             Button("Cancel", role: .cancel) { model.groupPrompt = nil }
         } message: {

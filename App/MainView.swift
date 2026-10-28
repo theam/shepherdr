@@ -93,6 +93,9 @@ struct MainView: View {
         view
         .alert("Rename Session", isPresented: Binding { model.renaming != nil } set: { if !$0 { model.renaming = nil } }) {
             TextField("Name", text: Binding { model.renaming?.name ?? "" } set: { model.renaming?.name = $0 })
+                // A field of its own for each prompt: the alert otherwise reuses the last one, often
+                // still empty from when that prompt was dismissed, and Rename then takes only what you type.
+                .id(model.renaming?.id)
             Button("Rename") {
                 guard let prompt = model.renaming else { return }
                 Task { await model.commitRename(prompt) }
