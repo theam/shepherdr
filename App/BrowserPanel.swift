@@ -391,19 +391,20 @@ struct BrowserPanel: View {
 
     private var tabStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
+            HStack(spacing: 4) {
                 ForEach(browser.tabs) { tab in tabChip(tab) }
                 Button {
                     browser.newTab()
                     address = ""
                     addressFocused = true
                 } label: {
-                    Text("+").font(Theme.mono(13, .bold)).frame(width: 30, height: 30).contentShape(Rectangle())
+                    Text("+").font(Theme.mono(13, .bold)).frame(width: 26, height: 26).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.phosphor)
                 .help("New tab")
             }
+            .padding(.horizontal, 6).padding(.vertical, 5)
         }
         .background(Theme.panel)
     }
@@ -424,11 +425,10 @@ struct BrowserPanel: View {
         .font(Theme.mono(10.5))
         .foregroundStyle(selected ? Theme.text : Theme.dim)
         .frame(maxWidth: 180, alignment: .leading)
-        .padding(.horizontal, 10).frame(height: 30)
-        .background(selected ? Theme.background : .clear)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.phosphor).frame(height: 2).opacity(selected ? 1 : 0) }
-        .overlay(alignment: .trailing) { Rectangle().fill(Theme.line).frame(width: 1) }
-        .contentShape(Rectangle())
+        .padding(.horizontal, 10).frame(height: 26)
+        .background(selected ? Theme.raised : Theme.background, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(selected ? Theme.phosphor.opacity(0.7) : Theme.line, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 6))
         .onTapGesture { browser.selectedID = tab.id }
         .help(tab.url?.absoluteString ?? tab.displayTitle)
     }

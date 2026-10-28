@@ -162,7 +162,7 @@ herdr status</code></pre>
 <li><b>Crear y cerrar sesiones</b> con <kbd>⌘N</kbd>.</li>
 <li><b>Compass, la página de tu día.</b> Un agente propio la mantiene, y sus botones lanzan las sesiones que propone cuando tú las revisas.</li>
 </ul>
-<p>Sin cuentas, sin telemetría, sin servidor. Los prompts, la salida de la terminal y tu voz nunca se escriben en disco, salvo el primer prompt de una sesión que lanzas desde Compass, que espera hasta que el agente lo recibe y entonces se borra. Solo se recuerdan tu cola, los repos que sigue tu bandeja de GitHub y qué has visto de ellos, lo que GitHub dijo de los PRs, issues y repos por los que preguntó, y, por sesión, sus pestañas y enlaces; con Compass, también lo que muestra la cola, para su agente. El dictado se ejecuta por completo en tu Mac.</p>
+<p>Sin cuentas, sin telemetría, sin servidor. Los prompts, la salida de la terminal y tu voz nunca se escriben en disco, salvo el primer prompt de una sesión que lanzas desde Compass, que espera hasta que el agente lo recibe y entonces se borra. Solo se recuerdan tu cola, los repos que sigue tu bandeja de GitHub y qué has visto de ellos, lo que GitHub dijo de los PRs, issues y repos por los que preguntó, y, por sesión, sus pestañas y enlaces; con Compass, también lo que muestra la cola, para su agente. El dictado se ejecuta por completo en tu Mac. Lo único que Shepherdr pide por su cuenta es el uso de la suscripción de Claude bajo una sesión de Claude Code: envía a Anthropic, cada cinco minutos, el token que Claude Code guarda en tu llavero, y nada más. El uso de Codex, y el modelo y el esfuerzo de ambos agentes, se leen de sus propios ficheros de sesión en este Mac, sin ninguna petición.</p>
 </div>
 <div class="en">
 <h2>Features</h2>
@@ -178,7 +178,7 @@ herdr status</code></pre>
 <li><b>Create and close sessions</b> with <kbd>⌘N</kbd>.</li>
 <li><b>Compass, the page of your day.</b> An agent of its own keeps it, and its buttons start the sessions it suggests once you check them.</li>
 </ul>
-<p>No accounts, no telemetry, no server. Prompts, terminal output and your voice never touch the disk, except the first prompt of a session you start from Compass, which waits until its agent takes it and is then deleted. Only your queue, the repositories your GitHub inbox follows and what you've seen in them, what GitHub said about the PRs, issues and repositories it was asked about, and, per session, its browser tabs and links are remembered; with Compass, also what the queue shows, for its agent. Dictation runs entirely on your Mac.</p>
+<p>No accounts, no telemetry, no server. Prompts, terminal output and your voice never touch the disk, except the first prompt of a session you start from Compass, which waits until its agent takes it and is then deleted. Only your queue, the repositories your GitHub inbox follows and what you've seen in them, what GitHub said about the PRs, issues and repositories it was asked about, and, per session, its browser tabs and links are remembered; with Compass, also what the queue shows, for its agent. Dictation runs entirely on your Mac. The only request of its own is the Claude subscription's usage under a Claude Code session: it sends the token Claude Code keeps in your keychain to Anthropic, every five minutes, and nothing else. Codex's usage, and the model and effort of both agents, are read from their own session files on this Mac, with no request.</p>
 </div>
 </section>
 <section id="connect">
@@ -200,7 +200,7 @@ herdr status</code></pre>
 <section id="queue">
 <div class="es">
 <h2>La cola</h2>
-<p>La barra lateral es tu lista de sesiones, de todas las máquinas, en el orden que tú decidas. El número de cada fila es su prioridad. Cada fila muestra el workspace, qué hace el agente y dónde trabaja (la carpeta o, en un worktree de Git, el proyecto en cian), y el número de su pull request si la tiene.</p>
+<p>La barra lateral es tu lista de sesiones, de todas las máquinas, en el orden que tú decidas. La posición de cada fila es su prioridad. Cada fila ocupa una línea: qué hace el agente, el nombre de la sesión, su máquina si tienes varias y un sobre si tiene correo, y una <b>✗</b> roja si fallaron los checks de su PR. Déjalo un segundo encima para ver el título, el repo, la carpeta, el número de PRs, la máquina, cuándo informó por última vez y su estado; el resto está en el botón <b>ⓘ</b> de la sesión, con su rama. <i>Open Pull Requests</i>, en el menú contextual de la fila, abre sus PRs en el navegador de la sesión.</p>
 <ul>
 <li>Arrastra una sesión para moverla (una línea marca dónde caerá), usa las flechas ▲▼, <kbd>⌥⌘↑</kbd> y <kbd>⌥⌘↓</kbd>, o <i>Move to Top/Bottom</i> en su menú.</li>
 <li>Salta con <kbd>⌘1</kbd> … <kbd>⌘9</kbd>, avanza con <kbd>⌘[</kbd> y <kbd>⌘]</kbd>, y vuelve al resumen con <kbd>⌘0</kbd>.</li>
@@ -210,22 +210,22 @@ herdr status</code></pre>
 <h3>Grupos</h3>
 <p>Reúne sesiones como quieras (un proyecto, un cliente, trabajo personal). Un grupo ocupa una posición en la cola y se prioriza como una sola sesión; dentro, cada sesión conserva su orden.</p>
 <ul>
-<li>Créalo con <b>+ group</b>, con <i>Session → New Group…</i> o con <i>Move to Group</i> en el menú de una sesión.</li>
+<li>Créalo con <b>New Group…</b> en el menú <b>⋯</b> de la cabecera de la cola, con <i>Session → New Group…</i> o con <i>Move to Group</i> en el menú de una sesión.</li>
 <li>Suelta una sesión sobre la cabecera para añadirla. Los grupos no se anidan.</li>
 <li>Un grupo plegado sigue mostrando cuántas de sus sesiones te necesitan, y sus sesiones se saltan con <kbd>⌘1…⌘9</kbd>.</li>
 <li><b>+</b> en la cabecera crea una sesión dentro del grupo. <i>Ungroup</i> nunca cierra sesiones.</li>
 </ul>
 <h3>Proyectos</h3>
-<p>Activa <i>View → Gather Sessions by Project</i>, o <b>[ ] projects</b> en la cabecera de la cola, para reunir bajo una cabecera las sesiones de cada proyecto (un repositorio de Git: su checkout principal y sus worktrees, en cualquier máquina), arriba en la cola y dentro de cada grupo. Viene desactivado.</p>
+<p>Activa <i>View → Gather Sessions by Project</i>, o <b>Gather by Project</b> en el menú <b>⋯</b> de la cabecera de la cola, para reunir bajo una cabecera las sesiones de cada proyecto (un repositorio de Git: su checkout principal y sus worktrees, en cualquier máquina), arriba en la cola y dentro de cada grupo. Viene desactivado.</p>
 <ul>
-<li>La cabecera ocupa el lugar de la sesión más prioritaria del proyecto; una sesión sola sigue siendo una fila normal. Los números y <kbd>⌘1…⌘9</kbd> siguen lo que ves.</li>
+<li>La cabecera ocupa el lugar de la sesión más prioritaria del proyecto; una sesión sola sigue siendo una fila normal. El orden y <kbd>⌘1…⌘9</kbd> siguen lo que ves.</li>
 <li>Bajo una cabecera, ▲▼ y arrastrar reordenan las sesiones del proyecto; las ▲▼ de la cabecera mueven el proyecto entero.</li>
 <li>Haz clic en una cabecera para plegarla. Sigue mostrando cuántas de sus sesiones te necesitan.</li>
 </ul>
 </div>
 <div class="en">
 <h2>The queue</h2>
-<p>The sidebar is your list of sessions, from all machines, in the order you choose. Each row's number is its priority. Each row shows the workspace, what the agent is doing, where it works (the folder or, for a Git worktree, its project in cyan), and its pull request number if it has one.</p>
+<p>The sidebar is your list of sessions, from all machines, in the order you choose. A row's position is its priority. Each row takes one line: what the agent is doing, the session's name, its machine if you have several and an envelope when it has mail, plus a red <b>✗</b> when checks failed on its PR. Hover it for a second for the title, repo, folder, number of PRs, machine, when it last reported and its state; the rest is behind the session's <b>ⓘ</b> button, with its branch. <i>Open Pull Requests</i>, in the row's context menu, opens its PRs in the session's browser.</p>
 <ul>
 <li>Drag a session to move it (a line shows where it lands), use the ▲▼ controls, <kbd>⌥⌘↑</kbd> and <kbd>⌥⌘↓</kbd>, or <i>Move to Top/Bottom</i> in its menu.</li>
 <li>Jump with <kbd>⌘1</kbd> … <kbd>⌘9</kbd>, step with <kbd>⌘[</kbd> and <kbd>⌘]</kbd>, and return to the overview with <kbd>⌘0</kbd>.</li>
@@ -235,15 +235,15 @@ herdr status</code></pre>
 <h3>Groups</h3>
 <p>Gather sessions however you like (a project, a client, personal work). A group is one position in the queue and is prioritized like a single session; inside, each session keeps its own order.</p>
 <ul>
-<li>Create one with <b>+ group</b>, <i>Session → New Group…</i> or <i>Move to Group</i> in a session's menu.</li>
+<li>Create one with <b>New Group…</b> in the <b>⋯</b> menu of the queue header, <i>Session → New Group…</i> or <i>Move to Group</i> in a session's menu.</li>
 <li>Drop a session on a header to add it. Groups don't nest.</li>
 <li>A collapsed group still shows how many of its sessions need you, and its sessions are skipped by <kbd>⌘1…⌘9</kbd>.</li>
 <li><b>+</b> on the header creates a session in the group. <i>Ungroup</i> never closes sessions.</li>
 </ul>
 <h3>Projects</h3>
-<p>Turn on <i>View → Gather Sessions by Project</i>, or <b>[ ] projects</b> in the queue header, to gather each project's sessions (a Git repository: its main checkout and its worktrees, on any machine) under a heading, at the top of the queue and inside each group. It's off by default.</p>
+<p>Turn on <i>View → Gather Sessions by Project</i>, or <b>Gather by Project</b> in the <b>⋯</b> menu of the queue header, to gather each project's sessions (a Git repository: its main checkout and its worktrees, on any machine) under a heading, at the top of the queue and inside each group. It's off by default.</p>
 <ul>
-<li>A heading sits where the project's highest-priority session was; a lone session stays a plain row. Numbers and <kbd>⌘1…⌘9</kbd> follow what you see.</li>
+<li>A heading sits where the project's highest-priority session was; a lone session stays a plain row. The order and <kbd>⌘1…⌘9</kbd> follow what you see.</li>
 <li>Under a heading, ▲▼ and dragging reorder the project's sessions; the heading's ▲▼ move the whole project.</li>
 <li>Click a heading to collapse it. It still shows how many of its sessions need you.</li>
 </ul>
@@ -254,13 +254,14 @@ herdr status</code></pre>
 <h2>Trabajar con una sesión</h2>
 <p>Al seleccionarla se abre su terminal real en el área principal, con el teclado enfocado y la entrada activa.</p>
 <ul>
-<li>Escribe directamente en la TUI del agente. <kbd>⇧⏎</kbd> añade una línea sin enviar. La barra inferior tiene teclas rápidas (Esc, ^C, Tab, flechas, Return).</li>
-<li><kbd>⌘L</kbd> abre el <b>editor de prompts</b>, para textos largos. Guarda el borrador, <kbd>⏎</kbd> envía y <kbd>↑</kbd>/<kbd>↓</kbd> recuperan prompts de esa sesión.</li>
+<li>Escribe directamente en la TUI del agente. <kbd>⇧⏎</kbd> añade una línea sin enviar.</li>
+<li><kbd>⌘L</kbd> (o el icono del lápiz de la barra de estado inferior) abre el <b>editor de prompts</b>, para textos largos. Guarda el borrador, <kbd>⏎</kbd> envía y <kbd>↑</kbd>/<kbd>↓</kbd> recuperan prompts de esa sesión.</li>
+<li>Bajo la terminal, la <b>barra de estado</b>, que ocupa todo el ancho (también bajo el navegador y Resources), tiene a la izquierda el editor de prompts y el dictado, y a su lado dónde estás (Claude Code, Codex, Terminal…) con el modelo y el esfuerzo de esa sesión; a la derecha, en Claude Code y Codex, el uso de tu suscripción: dos líneas por límite de 5 horas y semanal (lo gastado y el tiempo transcurrido), el porcentaje y cuándo se reinicia.</li>
 <li>Suelta <b>ficheros o imágenes</b> en la terminal para pegar su ruta; Claude Code y Codex adjuntan las imágenes. En una máquina remota se copian antes por SSH a <code>~/.cache/shepherdr/drops</code>.</li>
 <li>Haz clic en una opción de un <b>menú numerado</b> (permisos) para marcarla; doble clic para confirmar.</li>
 <li><kbd>⌘⎋</kbd> envía Escape para interrumpir. El <b>candado</b> (<kbd>⌘E</kbd>) deja la sesión en solo lectura.</li>
 <li>Si otro cliente controla la terminal, queda bloqueada y se ofrece <b>Take Over</b>, siempre como decisión explícita.</li>
-<li>Para que un agente escriba a otro, clic derecho en el ID del panel (<code>w3:p1</code>) → <i>Copy Reference for Agents</i>.</li>
+<li>Para que un agente escriba a otro, abre <b>ⓘ</b> y haz clic derecho en el ID de <i>For other agents</i> (<code>w3:p1</code>) → <i>Copy Reference for Agents</i>.</li>
 <li>El botón de la carpeta en la cabecera, o <kbd>⇧⌘O</kbd>, abre en Finder la carpeta donde trabaja el agente, si está en este Mac.</li>
 <li>Haz clic en el <b>nombre de otra sesión</b> o en su ID de panel (<code>w3:p1</code>) en la terminal para ir a ella, como en lo que imprime <code>shepherdr</code> al lanzar una. <code>nombre@máquina</code> elige la máquina.</li>
 </ul>
@@ -274,13 +275,14 @@ herdr status</code></pre>
 <h2>Working with a session</h2>
 <p>Selecting one opens its real terminal in the main area, with keyboard focus and input enabled.</p>
 <ul>
-<li>Type straight into the agent's TUI. <kbd>⇧⏎</kbd> adds a line without sending. The bottom bar has quick keys (Esc, ^C, Tab, arrows, Return).</li>
-<li><kbd>⌘L</kbd> opens the <b>prompt editor</b>, for long text. It keeps your draft, <kbd>⏎</kbd> sends and <kbd>↑</kbd>/<kbd>↓</kbd> recall this session's prompts.</li>
+<li>Type straight into the agent's TUI. <kbd>⇧⏎</kbd> adds a line without sending.</li>
+<li><kbd>⌘L</kbd> (or the pencil icon in the bottom status bar) opens the <b>prompt editor</b>, for long text. It keeps your draft, <kbd>⏎</kbd> sends and <kbd>↑</kbd>/<kbd>↓</kbd> recall this session's prompts.</li>
+<li>Under the terminal, the <b>status bar</b>, across the full width (also under the browser and Resources), has the prompt editor and dictation on the left, and next to them where you are (Claude Code, Codex, Terminal…) with that session's model and effort; on the right, in Claude Code and Codex, your subscription usage: two lines per 5-hour and weekly limit (what is used and the time gone), the percentage and when each starts again.</li>
 <li>Drop <b>files or images</b> on the terminal to paste their paths; Claude Code and Codex attach images. On a remote machine they're first copied over SSH to <code>~/.cache/shepherdr/drops</code>.</li>
 <li>Click an option of a <b>numbered menu</b> (permissions) to select it; double-click to confirm.</li>
 <li><kbd>⌘⎋</kbd> sends Escape to interrupt. The <b>padlock</b> (<kbd>⌘E</kbd>) makes the session read-only.</li>
 <li>If another client controls the terminal, it stays locked and offers <b>Take Over</b>, always an explicit choice.</li>
-<li>To have one agent message another, right-click the pane ID (<code>w3:p1</code>) → <i>Copy Reference for Agents</i>.</li>
+<li>To have one agent message another, open <b>ⓘ</b> and right-click the ID under <i>For other agents</i> (<code>w3:p1</code>) → <i>Copy Reference for Agents</i>.</li>
 <li>The folder button in the header, or <kbd>⇧⌘O</kbd>, opens the folder the agent works in, in Finder, when it's on this Mac.</li>
 <li>Click <b>another session's name</b> or its pane ID (<code>w3:p1</code>) in the terminal to go to it, as in what <code>shepherdr</code> prints when it starts one. <code>name@machine</code> picks the machine.</li>
 </ul>
@@ -295,19 +297,19 @@ herdr status</code></pre>
 <div class="es">
 <h2>Navegador y recursos</h2>
 <p>Cada sesión tiene su navegador junto a la terminal. Haz clic en un enlace y se abre ahí, en una pestaña nueva o en la que ya lo muestra; <kbd>⌘</kbd>-clic usa tu navegador. <kbd>⌘B</kbd> lo muestra u oculta. Las pestañas siguen cargadas al cambiar de sesión y vuelven tras reiniciar. Si hay demasiadas, o macOS anda corto de memoria, sueltan su página primero las de las sesiones a las que menos vuelves, y la cargan de nuevo al mostrarla. La terminal también se queda como la dejaste: al volver a una sesión la ves al instante. Los inicios de sesión se comparten y persisten (los de Safari no se pueden reutilizar).</p>
-<p><kbd>⌘?</kbd> o <b>?</b> al pie de la barra lateral abren esta guía en el navegador de la sesión que miras, o en el del resumen; <i>Help → Herdr Documentation</i>, la de Herdr.</p>
+<p><kbd>⌘?</kbd> abre esta guía en el navegador de la sesión que miras, o en el del resumen; <i>Help → Herdr Documentation</i>, la de Herdr.</p>
 <p><b>Ficheros locales:</b> haz clic en una ruta que imprime el agente. El Markdown se abre renderizado, el HTML como página y lo demás en su app por defecto.</p>
 <h3>Recursos</h3>
-<p>El panel <b>RESOURCES</b> reúne las PRs e issues (GitHub, GitLab, Bitbucket, Linear, Jira) y artefactos de Claude que enlaza la sesión: los diez más relevantes, y <b>more</b> para el resto. Cada recurso nuevo se comprueba una vez, y los que no existen desaparecen.</p>
+<p>El panel <b>RESOURCES</b> (icono de lista en la cabecera, con su número; se cierra con la <b>×</b>) reúne las PRs e issues (GitHub, GitLab, Bitbucket, Linear, Jira) y artefactos de Claude que enlaza la sesión, con los iconos y colores de GitHub (verde abierta, morado fusionada o completada, rojo PR cerrada sin fusionar, gris issue descartada): los diez más relevantes, y <b>more</b> para el resto. Cada recurso nuevo se comprueba una vez, y los que no existen desaparecen. El botón <b>↻</b> de la cabecera vuelve a leer la salida reciente de la sesión: lo que ya no menciona sale del panel (los enlaces fijados por un agente se quedan) y el resto se vuelve a comprobar, también su estado en GitHub.</p>
 <p><b>Checks de CI.</b> Con la CLI de GitHub instalada y con sesión (<code>gh auth login</code>), Shepherdr vigila las PRs abiertas de la sesión que miras: ● corriendo, ✓ pasado, ✗ fallado. Al terminar, un aviso dice si pasaron.</p>
 </div>
 <div class="en">
 <h2>Browser and resources</h2>
 <p>Each session has its browser next to the terminal. Click a link and it opens there, in a new tab or the one already showing it; <kbd>⌘</kbd>-click uses your browser. <kbd>⌘B</kbd> shows or hides it. Tabs stay loaded while you switch sessions and return after a restart. When there are too many, or macOS runs short of memory, the tabs of the sessions you go back to least let go of their pages first, and load them again when shown. The terminal stays as you left it too: going back to a session shows it at once. Sign-ins are shared and persist (Safari's can't be reused).</p>
-<p><kbd>⌘?</kbd> or <b>?</b> at the foot of the sidebar opens this guide in the browser of the session you're viewing, or the overview's; <i>Help → Herdr Documentation</i> opens Herdr's.</p>
+<p><kbd>⌘?</kbd> opens this guide in the browser of the session you're viewing, or the overview's; <i>Help → Herdr Documentation</i> opens Herdr's.</p>
 <p><b>Local files:</b> click a path the agent prints. Markdown opens rendered, HTML as a page and anything else in its default app.</p>
 <h3>Resources</h3>
-<p>The <b>RESOURCES</b> panel gathers the PRs and issues (GitHub, GitLab, Bitbucket, Linear, Jira) and Claude artifacts a session links to: the ten most relevant, with <b>more</b> for the rest. Each new resource is checked once, and ones that don't exist leave the panel.</p>
+<p>The <b>RESOURCES</b> panel (the list icon in the header, with its count; close it with its <b>×</b>) gathers the PRs and issues (GitHub, GitLab, Bitbucket, Linear, Jira) and Claude artifacts a session links to, with GitHub's icons and colors (green open, purple merged or completed, red PR closed unmerged, gray issue dropped): the ten most relevant, with <b>more</b> for the rest. Each new resource is checked once, and ones that don't exist leave the panel. The <b>↻</b> button in the header reads the session's recent output again: what it no longer mentions leaves the panel (links an agent pinned stay) and the rest is checked again, GitHub state included.</p>
 <p><b>CI checks.</b> With the GitHub CLI installed and signed in (<code>gh auth login</code>), Shepherdr watches the open PRs of the session you're viewing: ● running, ✓ passed, ✗ failed. When they finish, an alert says whether they passed.</p>
 </div>
 </section>
@@ -321,10 +323,10 @@ herdr status</code></pre>
 <p>En el resumen, una sesión en espera cuenta como <b>ON HOLD</b> hasta que acaban las que espera, no como terminada: todas las vistas muestran el mismo estado. Una sesión que se cierra, desde Shepherdr o desde fuera, sale de las esperas a los 30 segundos. Si se espera a un <b>shell</b>, se espera al comando que ejecuta, como un script: al volver a su prompt, la espera termina sola. Las esperas se guardan en este Mac y, como copia, en Herdr, de donde las recupera un Mac nuevo.</p>
 <p>Una sesión a la que otras esperan las lista en <b>WAITED ON BY</b>. Con las herramientas de agentes en su máquina, <b>HANDOFF AND CLOSE</b> pide a su agente, en cuanto esté libre, que les traspase su trabajo con <code>shepherdr handoff</code>, y cierra la sesión cuando el traspaso llega a Shepherdr. Si en 15 minutos no llega, sigue abierta.</p>
 <h3>Dictado</h3>
-<p><kbd>⇧⌘D</kbd> empieza a grabar y abre el editor; al parar, la transcripción cae en el borrador para que la revises. Se transcribe en tu Mac con NVIDIA Parakeet TDT v3 (25 idiomas europeos, bueno con términos técnicos en inglés dentro de español). El modelo pesa unos 460 MB: Shepherdr pregunta antes de descargarlo la primera vez, y reutiliza el de <i>scribe</i> si ya lo tienes. Tu voz solo está en memoria mientras grabas.</p>
+<p><kbd>⇧⌘D</kbd> (o el micrófono de la barra de estado) empieza a grabar y abre el editor; al parar, la transcripción cae en el borrador para que la revises. Se transcribe en tu Mac con NVIDIA Parakeet TDT v3 (25 idiomas europeos, bueno con términos técnicos en inglés dentro de español). El modelo pesa unos 460 MB: Shepherdr pregunta antes de descargarlo la primera vez, y reutiliza el de <i>scribe</i> si ya lo tienes. Tu voz solo está en memoria mientras grabas.</p>
 <h3>Portátil</h3>
-<p>El pie de la barra lateral avisa si cerrar la tapa pausaría agentes que corren en este Mac. Los remotos no cuentan.</p>
-<p>La <b>taza de café</b> junto a ese aviso impide que este Mac se duerma mientras no la vuelvas a pulsar o cierres Shepherdr; al abrirlo, siempre está apagada. Enchufado, el Mac no se duerme; con batería, cerrar la tapa lo duerme igualmente, y el aviso lo dice. Con café, la taza echa humo y la cara de al lado abre los ojos de par en par. Con clic derecho en la taza puedes mantener también la pantalla encendida, que los agentes no necesitan.</p>
+<p>El pie de la barra lateral solo habla cuando hace falta: dice <b>Keep the lid open</b> si cerrar la tapa pausaría agentes que corren en este Mac (los remotos no cuentan), y avisa si hay máquinas sin conexión o el refresco está en pausa.</p>
+<p>La <b>taza de café</b> junto a la cara impide que este Mac se duerma mientras no la vuelvas a pulsar o cierres Shepherdr; al abrirlo, siempre está apagada. Enchufado, el Mac no se duerme; con batería, cerrar la tapa lo duerme igualmente, y el pie lo dice (<b>Lid still sleeps it</b>). Con café, la taza echa humo y la cara de al lado abre los ojos de par en par. Con clic derecho en la taza puedes mantener también la pantalla encendida, que los agentes no necesitan.</p>
 </div>
 <div class="en">
 <h2>Alerts, hold and dictation</h2>
@@ -335,10 +337,10 @@ herdr status</code></pre>
 <p>In the overview, a session on hold counts as <b>ON HOLD</b> until the ones it waits for finish, not as done: every view shows the same status. A session that closes, from Shepherdr or elsewhere, drops out of holds after 30 seconds. Waiting for a <b>shell</b> means waiting for the command it runs, such as a script: once it's back at its prompt, the wait ends on its own. Holds are kept on this Mac and, as a copy, in Herdr, where a new Mac finds them.</p>
 <p>A session others wait for lists them under <b>WAITED ON BY</b>. With the agent tools on its machine, <b>HANDOFF AND CLOSE</b> asks its agent, once it's free, to hand its work back to them with <code>shepherdr handoff</code>, and closes the session when the handoff reaches Shepherdr. If none comes within 15 minutes, it stays open.</p>
 <h3>Dictation</h3>
-<p><kbd>⇧⌘D</kbd> starts recording and opens the editor; when you stop, the transcript lands in the draft for you to review. It's transcribed on your Mac with NVIDIA Parakeet TDT v3 (25 European languages, good with English technical terms inside Spanish). The model is about 460 MB: Shepherdr asks before downloading it the first time, and reuses <i>scribe</i>'s copy if you have it. Your voice is only in memory while recording.</p>
+<p><kbd>⇧⌘D</kbd> (or the microphone in the status bar) starts recording and opens the editor; when you stop, the transcript lands in the draft for you to review. It's transcribed on your Mac with NVIDIA Parakeet TDT v3 (25 European languages, good with English technical terms inside Spanish). The model is about 460 MB: Shepherdr asks before downloading it the first time, and reuses <i>scribe</i>'s copy if you have it. Your voice is only in memory while recording.</p>
 <h3>Laptop</h3>
-<p>The foot of the sidebar tells you whether closing the lid would pause agents running on this Mac. Remote ones don't count.</p>
-<p>The <b>coffee cup</b> next to it keeps this Mac from sleeping until you click it again or quit Shepherdr; it's always off when Shepherdr opens. Plugged in, the Mac won't sleep; on battery, closing the lid still puts it to sleep, and the status says so. With coffee on, the cup steams and the face beside it opens its eyes wide. Right-click the cup to keep the screen on too, which agents don't need.</p>
+<p>The foot of the sidebar only speaks up when it matters: it says <b>Keep the lid open</b> if closing the lid would pause agents running on this Mac (remote ones don't count), and warns when machines are offline or refreshing is paused.</p>
+<p>The <b>coffee cup</b> next to the face keeps this Mac from sleeping until you click it again or quit Shepherdr; it's always off when Shepherdr opens. Plugged in, the Mac won't sleep; on battery, closing the lid still puts it to sleep, and the foot says so (<b>Lid still sleeps it</b>). With coffee on, the cup steams and the face beside it opens its eyes wide. Right-click the cup to keep the screen on too, which agents don't need.</p>
 </div>
 </section>
 <section id="remote">
