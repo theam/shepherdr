@@ -1,6 +1,15 @@
 # Verification
 
-## Agents wait for a fully awake Mac (unreleased)
+## Name prompts start with the current name (unreleased)
+
+Validated on 2026-10-28 on macOS 26.6.2 with Xcode 27 / Swift 6.4, for [#7](https://github.com/theam/shepherdr/issues/7):
+
+- **The cause, in a minimal app** with the same alert as **Rename Session**: an `@Observable` model with an optional prompt, and an alert whose `TextField` binds to the prompt's name. The app presented ten prompts in a row and closed each one by pressing its **Rename** or **Cancel** button in process, with no HID events. It read the field as each prompt opened. Some presentations focused or edited the field first. The field often came up empty after an earlier prompt was dismissed; one alert didn't show at all. And when an empty field was edited, **Rename** took only the typed text, which would have renamed a session to it.
+- **The fix:** the same app with `.id(prompt.id)` on the field. All ten prompts showed their names, the edits were committed as typed, and every alert appeared. **Rename Group** and **New Group** use the same pattern and got the same fix.
+- `xcodebuild … build` built the app.
+- Not verified: the alerts inside Shepherdr itself. SwiftUI alerts aren't in the accessibility tree, so a background scratch copy can't read their field.
+
+## Agents wait for a fully awake Mac (0.9.0)
 
 Validated on 2026-10-20 on an Apple Silicon MacBook with macOS 26.6.2, Xcode 27 / Swift 6.4 and Herdr 0.9.3:
 
@@ -10,7 +19,7 @@ Validated on 2026-10-20 on an Apple Silicon MacBook with macOS 26.6.2, Xcode 27 
 - **End to end, in a scratch home**, as for Compass below: a Herdr server of its own (`HOME=/tmp/shep-wake`), a stand-in `claude` that reports itself with `pane report-agent` and writes the day's page, and a copy of the app with its own bundle identifier, launched with `open -g` at 12:42:51. The 12:00 run, the day's first, was due. The monitor logged a path, then `api.anthropic.com` being looked up, then agents allowed 6 ms later. The agent started at 12:42:53 and was ready at 12:42:56; the prompt came at 12:43:13, the 15 seconds plus the next refresh. The page changed and the run ended `updated`, with its copy `days/2026-10-20/12-00.html`. The user's `default` session and app were never touched.
 - Not verified: a real dark wake, which can't be caused without putting the Mac to sleep, and a sleep or a lost network while the app starts an agent. The restart before the first prompt is covered by the tests and the harness only. The Courier's waits (deliveries to agents on this Mac, sessions requested on it, a request discarded meanwhile not starting) and typing in Compass's terminal counting once you leave it were checked by reading the code only.
 
-## Compass (unreleased)
+## Compass (0.8.6)
 
 Validated on 2026-10-15 on Apple Silicon with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
 
