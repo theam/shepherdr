@@ -26,6 +26,32 @@ struct SnapshotDTO: Decodable, Sendable {
     let tabs: [TabDTO]
     let panes: [PaneDTO]
     let agents: [AgentDTO]
+    /// A layout Shepherdr can't read leaves its tab showing one pane at a time, rather than failing
+    /// the whole snapshot. Herdr versions before layouts send none.
+    let layouts: [Lossy<LayoutDTO>]?
+}
+
+/// How Herdr lays out a tab's panes, in cells.
+struct LayoutDTO: Decodable, Sendable {
+    struct Rect: Decodable, Sendable {
+        let x: Double
+        let y: Double
+        let width: Double
+        let height: Double
+    }
+    struct Pane: Decodable, Sendable {
+        let paneId: String
+        let rect: Rect
+    }
+    let tabId: String
+    let area: Rect
+    let panes: [Pane]
+}
+
+/// A value that may fail to decode without failing what holds it.
+struct Lossy<Value: Decodable & Sendable>: Decodable, Sendable {
+    let value: Value?
+    init(from decoder: Decoder) throws { value = try? Value(from: decoder) }
 }
 
 struct WorkspaceDTO: Decodable, Sendable {
@@ -104,6 +130,13 @@ struct WorktreeListDTO: Decodable {
     }
     let source: Source?
     let worktrees: [Worktree]?
+}
+
+/// The pane `pane split` added.
+struct PaneInfoDTO: Decodable {
+    struct Envelope: Decodable { let result: PaneInfoDTO }
+    struct Pane: Decodable { let paneId: String; let terminalId: String }
+    let pane: Pane
 }
 
 struct ProcessInfoDTO: Decodable {
@@ -238,12 +271,25 @@ enum HerdrJSON {
                           state: AgentState(reportedValue: item.agentStatus))
             }, agents: agents, panes: dto.panes.map { pane in
                 TerminalPane(terminalID: pane.terminalId, paneID: pane.paneId,
-                             workspaceID: pane.workspaceId,
+                             workspaceID: pane.workspaceId, tabID: pane.tabId,
                              workspaceName: workspaces[pane.workspaceId]?.label.nonempty ?? pane.workspaceId,
                              title: agents.first { $0.id.terminalID == pane.terminalId }?.name
                                 ?? "\(tabs[pane.tabId]?.label.nonempty ?? pane.tabId) · \(pane.paneId)",
                              directory: pane.foregroundCwd?.nonempty ?? pane.cwd?.nonempty)
-            }, doorbells: doorbells, tokens: tokens)
+            }, doorbells: doorbells, tokens: tokens, layouts: layouts(dto.layouts?.compactMap(\.value) ?? []))
+    }
+
+    /// Each tab's panes, placed as parts of the tab's area.
+    private static func layouts(_ layouts: [LayoutDTO]) -> [String: TabLayout] {
+        var result: [String: TabLayout] = [:]
+        for layout in layouts where layout.area.width > 0 && layout.area.height > 0 {
+            let area = layout.area
+            result[layout.tabId] = TabLayout(tabID: layout.tabId, panes: layout.panes.map { pane in
+                TabLayout.Pane(paneID: pane.paneId, frame: CGRect(x: (pane.rect.x - area.x) / area.width, y: (pane.rect.y - area.y) / area.height,
+                                                                  width: pane.rect.width / area.width, height: pane.rect.height / area.height))
+            })
+        }
+        return result
     }
 
     private static func requireUnique(_ ids: [String], resource: String) throws {

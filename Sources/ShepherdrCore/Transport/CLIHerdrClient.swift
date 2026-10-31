@@ -131,6 +131,17 @@ public struct CLIHerdrClient: HerdrClient, HerdrTerminalClient {
         try validate(try await execute(prefix + ["pane", "close", paneID]), machine: machine)
     }
 
+    public func splitPane(_ paneID: String, _ direction: SplitDirection, directory: String?, on machine: Machine) async throws -> String {
+        try requireArgument(paneID, "pane")
+        if let directory { try requireArgument(directory, "directory") }
+        let prefix = machine.profileID.map { ["--machine", $0] } ?? []
+        let cwd = directory.map { ["--cwd", $0] } ?? []
+        let output = try await execute(prefix + ["pane", "split", paneID, "--direction", direction.rawValue] + cwd + ["--no-focus"])
+        try validate(output, machine: machine)
+        do { return try HerdrJSON.decoder().decode(PaneInfoDTO.Envelope.self, from: output.stdout).result.pane.terminalId }
+        catch { throw decodingFailure(error) }
+    }
+
     public func recentOutput(paneID: String, on machine: Machine, lines: Int) async throws -> String {
         try requireArgument(paneID, "pane")
         let prefix = machine.profileID.map { ["--machine", $0] } ?? []

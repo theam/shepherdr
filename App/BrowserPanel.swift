@@ -4,7 +4,8 @@ import WebKit
 import ShepherdrCore
 
 /// A session's own browser. Its tabs stay open, scrolled and signed in while you move between
-/// sessions. Links clicked in the terminal open here; ⌘-click opens the default browser instead.
+/// sessions. Links clicked in the terminal open here; ⌘-click opens the default browser instead,
+/// as Slack's links always do.
 @MainActor @Observable
 final class SessionBrowser {
     private(set) var tabs: [BrowserTab] = []
@@ -15,8 +16,13 @@ final class SessionBrowser {
 
     var selected: BrowserTab? { tabs.first { $0.id == selectedID } ?? tabs.last }
 
-    /// Shows a link, reusing a tab already on that page.
+    /// Shows a link, reusing a tab already on that page. Links that belong to a Mac app, such as
+    /// Slack's, go to macOS instead.
     func open(_ url: URL) {
+        if ExternalLinks.contains(url) {
+            BrowserTab.openOutside(url)
+            return
+        }
         isVisible = true
         if let tab = tabs.first(where: { $0.url == url }) {
             selectedID = tab.id
@@ -231,7 +237,7 @@ final class BrowserTab: NSObject, Identifiable, WKNavigationDelegate, WKUIDelega
         webView.removeFromSuperview()
     }
 
-    /// Where ⌘-clicked links go: your default browser.
+    /// Where links that leave Shepherdr go: macOS, which opens web links in your default browser.
     static var openOutside: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     /// A ⌘-click on a link, which opens it in your default browser instead.
@@ -239,10 +245,18 @@ final class BrowserTab: NSObject, Identifiable, WKNavigationDelegate, WKUIDelega
         action.navigationType == .linkActivated && action.modifierFlags.contains(.command)
     }
 
-    // Links that ask for a new window open as a tab in the same session's browser.
+    /// A click on a link that belongs to a Mac app, such as Slack's. Redirects and forms that pass
+    /// through one, as signing in may, stay in the page.
+    private static func isAppLinkClick(_ action: WKNavigationAction) -> Bool {
+        guard action.navigationType == .linkActivated, let url = action.request.url else { return false }
+        return ExternalLinks.contains(url)
+    }
+
+    // Links that ask for a new window open as a tab in the same session's browser, unless they
+    // leave Shepherdr.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if Self.isCommandClick(navigationAction), let url = navigationAction.request.url {
+        if let url = navigationAction.request.url, Self.isCommandClick(navigationAction) || ExternalLinks.contains(url) {
             Self.openOutside(url)
             return nil
         }
@@ -261,7 +275,7 @@ final class BrowserTab: NSObject, Identifiable, WKNavigationDelegate, WKUIDelega
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
         guard let url = navigationAction.request.url, let scheme = url.scheme?.lowercased() else { return (.allow, preferences) }
-        if Self.isCommandClick(navigationAction) {
+        if Self.isCommandClick(navigationAction) || Self.isAppLinkClick(navigationAction) {
             Self.openOutside(url)
             return (.cancel, preferences)
         }
@@ -476,7 +490,8 @@ struct BrowserPanel: View {
         guard !text.isEmpty, !text.contains(" ") else { return }
         let candidate = text.contains("://") ? text : "https://\(text)"
         guard let url = URL(string: candidate), url.host() != nil else { return }
-        if let tab = browser.selected { tab.load(url) } else { browser.open(url) }
+        if ExternalLinks.contains(url) { BrowserTab.openOutside(url) }
+        else if let tab = browser.selected { tab.load(url) } else { browser.open(url) }
         addressFocused = false
     }
 }

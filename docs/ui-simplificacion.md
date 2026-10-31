@@ -22,7 +22,7 @@ Criterio para que Shepherdr enseñe lo mínimo a primera vista y el detalle al e
 | Ver el detalle de una sesión | Botón ⓘ de la cabecera de la sesión: máquina, carpeta, agente, comandos que siguen en marcha, ID de pane | — |
 | Actuar sobre una sesión (renombrar, cerrar, esperar, prioridad, grupo, copiar referencia) | Menú contextual de la fila | Menú Session |
 | Pull requests de una sesión | Panel Resources de la sesión; "Open Pull Requests" en el menú contextual de la fila; ✗ en la fila solo si fallan los checks | — |
-| Herramientas de la sesión abierta (editor de prompt, dictado, teclas, recursos, navegador, bloqueo) | Iconos a la derecha de la cabecera de la sesión | ⌘L, ⇧⌘D, ⌘B, ⌘E, ⌘⎋ |
+| Herramientas de la sesión abierta (editor de prompt, dictado, teclas, recursos, navegador, bloqueo) | Iconos a la derecha de la cabecera de la sesión | ⌘L, ⇧⌘M, ⌘B, ⌘E, ⌘⎋ |
 | Organizar la cola (grupos, agrupar por proyecto) | Menú "⋯" de la cabecera "Sessions" | Menú View y menú Session |
 | Máquinas: estado | Tarjetas de máquina en Overview; aviso en el pie de la barra lateral solo si alguna falla | — |
 | Máquinas: gestión | Settings → Machines | — |

@@ -583,7 +583,8 @@ final class AppModel {
         cluster.machines.flatMap { state -> [ShellRow] in
             guard let snapshot = state.snapshot else { return [] }
             let agentTerminals = Set(snapshot.agents.map(\.id.terminalID))
-            return snapshot.panes.filter { !agentTerminals.contains($0.terminalID) }
+            // A shell split beside a session shows in it, not on its own.
+            return snapshot.panes.filter { !agentTerminals.contains($0.terminalID) && !snapshot.showsInside(shell: $0.terminalID) }
                 .filter { !compass.isCompass(Agent.ID(machineID: state.id, terminalID: $0.terminalID)) }
                 .map { ShellRow(pane: $0, machine: state.machine, isStale: state.isStale) }
         }
@@ -1284,8 +1285,22 @@ final class AppModel {
         let font = ConsoleFonts.font(family: defaults.string(forKey: "terminalFontFamily") ?? ConsoleFonts.defaultFamily,
                                      size: size > 0 ? size : 13, ligatures: defaults.bool(forKey: ConsoleFonts.ligaturesKey))
         let holder = TerminalHolder(store: TerminalStore(target: context.target, mode: mode), palette: Theme.terminal, font: font)
+        let paneID = context.paneID
+        holder.store.onGone = { [weak self] in self?.paneEnded(id, paneID: paneID) }
         terminals[id] = holder
         return holder
+    }
+
+    /// A pane whose terminal ended in Herdr, such as a shell you typed `exit` in, leaves at once, as
+    /// when you close it here. Its terminal goes with the next trim, once nothing shows it.
+    private func paneEnded(_ pane: Agent.ID, paneID: String) {
+        guard context(for: pane) != nil else { return }
+        let wasFocused = selectedID.map { $0 != pane && focusedPane(in: $0) == pane } ?? false
+        Task {
+            await cluster.paneClosed(paneID, onMachine: pane.machineID)
+            // The session's own pane takes the keyboard again.
+            if wasFocused { terminalFocusRequest += 1 }
+        }
     }
 
     /// Detaches every terminal, as Shepherdr quits.
@@ -1307,6 +1322,12 @@ final class AppModel {
         case (_, .session(let id)): .session(id)
         }
         interest[place, default: .init()].visit(at: now)
+        // A session's splits are part of it.
+        if case .session(let id) = place {
+            for pane in split(of: id) ?? [] where pane.terminalID != id.terminalID {
+                interest[.session(Agent.ID(machineID: id.machineID, terminalID: pane.terminalID)), default: .init()].visit(at: now)
+            }
+        }
         trimCaches(now: now)
     }
 
@@ -1482,6 +1503,7 @@ final class AppModel {
         abandonDictation(for: id)
         drafts[id] = nil
         sessionNotices[id] = nil
+        focusedPanes[id] = nil
         workspaces.removeValue(forKey: id)?.browser.closeAll()
         sessionStates.forget(id)
         relations.forget(id)
@@ -1505,6 +1527,84 @@ final class AppModel {
         } catch {
             actionFailure = Self.failure(error)
             return false
+        }
+    }
+
+    // MARK: Splits
+
+    /// The pane of each session you work in, when it's one of its splits rather than its own.
+    var focusedPanes: [Agent.ID: Agent.ID] = [:]
+    /// A split ⌘W asked to close while something runs in it, waiting for you to confirm.
+    var closingSplit: Agent.ID?
+
+    /// The panes a session shows side by side or stacked, when its Herdr tab has more than one.
+    func split(of id: Agent.ID) -> [SplitPane]? {
+        cluster.machines.first { $0.id == id.machineID }?.snapshot?.split(of: id.terminalID)
+    }
+
+    /// The pane of a session you work in: the split you last clicked, else the session's own.
+    func focusedPane(in session: Agent.ID) -> Agent.ID {
+        guard let pane = focusedPanes[session],
+              split(of: session)?.contains(where: { $0.terminalID == pane.terminalID }) == true else { return session }
+        return pane
+    }
+
+    func focusPane(_ pane: Agent.ID, in session: Agent.ID) {
+        let chosen = pane == session ? nil : pane
+        if focusedPanes[session] != chosen { focusedPanes[session] = chosen }
+    }
+
+    /// Whether ⌘D can split the pane you work in: in Agents, on a machine that answers.
+    var canSplit: Bool {
+        guard mode == .agents, let id = selectedID, let context = context(for: focusedPane(in: id)) else { return false }
+        return context.canConnect && !context.isStale
+    }
+
+    /// Splits the pane you work in, beside it or under it, with a shell in its folder, and moves
+    /// you to the new pane once Herdr shows it.
+    func split(_ direction: SplitDirection) {
+        guard canSplit, let session = selectedID else { return }
+        let pane = focusedPane(in: session)
+        guard let context = context(for: pane) else { return }
+        let directory = context.agent?.agent.directory
+            ?? context.machine.snapshot?.panes.first { $0.terminalID == pane.terminalID }?.directory
+        Task {
+            do {
+                let terminal = try await cluster.splitPane(context.paneID, direction, directory: directory, onMachine: pane.machineID)
+                focusPane(Agent.ID(machineID: pane.machineID, terminalID: terminal), in: session)
+                terminalFocusRequest += 1
+            } catch {
+                actionFailure = Self.failure(error)
+            }
+        }
+    }
+
+    /// ⌘W in a split: a shell at its prompt closes at once; an agent, a running command or a pane
+    /// Herdr can't tell about waits for you to confirm.
+    func requestCloseSplit(_ pane: Agent.ID) {
+        guard let context = context(for: pane) else { return }
+        guard context.agent == nil else {
+            closingSplit = pane
+            return
+        }
+        Task {
+            if await cluster.runsCommand(paneID: context.paneID, onMachine: pane.machineID) == false { await closeSplit(pane) }
+            else { closingSplit = pane }
+        }
+    }
+
+    /// Ends a split's pane in Herdr; the session's own pane takes the keyboard again.
+    func closeSplit(_ pane: Agent.ID) async {
+        closingSplit = nil
+        guard let context = context(for: pane) else { return }
+        do {
+            try await cluster.closeSession(paneID: context.paneID, onMachine: pane.machineID)
+            forgetSession(pane)
+            // Its terminal ended with the pane; nothing would show it again.
+            terminals.removeValue(forKey: pane)?.close()
+            terminalFocusRequest += 1
+        } catch {
+            actionFailure = Self.failure(error)
         }
     }
 

@@ -9,6 +9,8 @@ public protocol HerdrClient: Sendable {
     // Explicit, user-initiated changes. Herdr stays the authority; the store refreshes afterwards.
     func createSession(_ request: NewSessionRequest, on machine: Machine) async throws -> CreatedSession
     func closeSession(paneID: String, on machine: Machine) async throws
+    /// Splits a pane, starting a shell in `directory` in the new one, and returns its terminal ID.
+    func splitPane(_ paneID: String, _ direction: SplitDirection, directory: String?, on machine: Machine) async throws -> String
     func addMachine(_ request: NewMachineRequest) async throws
     func removeMachine(profileID: String) async throws
     func setMachine(profileID: String, enabled: Bool) async throws
@@ -45,6 +47,7 @@ extension HerdrClient {
     private var unsupported: HerdrFailure { HerdrFailure(.incompatible, "This Herdr client cannot change sessions or machines.") }
     public func createSession(_ request: NewSessionRequest, on machine: Machine) async throws -> CreatedSession { throw unsupported }
     public func closeSession(paneID: String, on machine: Machine) async throws { throw unsupported }
+    public func splitPane(_ paneID: String, _ direction: SplitDirection, directory: String?, on machine: Machine) async throws -> String { throw unsupported }
     public func addMachine(_ request: NewMachineRequest) async throws { throw unsupported }
     public func removeMachine(profileID: String) async throws { throw unsupported }
     public func setMachine(profileID: String, enabled: Bool) async throws { throw unsupported }

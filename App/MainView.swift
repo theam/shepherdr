@@ -94,6 +94,9 @@ struct MainView: View {
         view
         .alert("Rename Session", isPresented: Binding { model.renaming != nil } set: { if !$0 { model.renaming = nil } }) {
             TextField("Name", text: Binding { model.renaming?.name ?? "" } set: { model.renaming?.name = $0 })
+                // A field of its own for each prompt: the alert otherwise reuses the last one, often
+                // still empty from when that prompt was dismissed, and Rename then takes only what you type.
+                .id(model.renaming?.id)
             Button("Rename") {
                 guard let prompt = model.renaming else { return }
                 Task { await model.commitRename(prompt) }
@@ -119,6 +122,13 @@ struct MainView: View {
             Button("Cancel", role: .cancel) { model.closingSession = nil }
         } message: { id in
             Text(closeMessage(id))
+        }
+        .confirmationDialog("Close this split?", isPresented: Binding { model.closingSplit != nil } set: { if !$0 { model.closingSplit = nil } },
+                            titleVisibility: .visible, presenting: model.closingSplit) { id in
+            Button("Close Split", role: .destructive) { Task { await model.closeSplit(id) } }
+            Button("Cancel", role: .cancel) { model.closingSplit = nil }
+        } message: { id in
+            Text(closeSplitMessage(id))
         }
         .alert(model.actionFailure?.message ?? "", isPresented: Binding { model.actionFailure != nil } set: { if !$0 { model.actionFailure = nil } }) {
             Button("OK") { model.actionFailure = nil }
@@ -165,6 +175,12 @@ struct MainView: View {
         let what = context.agent.map { "ends \($0.agent.program.name) and closes" } ?? "closes"
         return "This \(what) the session\(context.machine.machine.isLocal ? "" : " on \(context.machine.machine.name)"). "
             + "This can't be undone."
+    }
+
+    private func closeSplitMessage(_ id: Agent.ID) -> String {
+        guard let context = model.context(for: id) else { return "" }
+        let what = context.agent.map { "\($0.agent.program.name) runs" } ?? "A command may be running"
+        return "\(what) in pane \(context.paneID). Closing the split ends it in Herdr. This cannot be undone."
     }
 
     private func configureRefresh() {

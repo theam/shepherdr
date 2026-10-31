@@ -1,6 +1,38 @@
 # Verification
 
-## Agents wait for a fully awake Mac (unreleased)
+## Slack links leave the browser (unreleased)
+
+Validated on 2026-10-31 on macOS 26.6.2 with Xcode 27 / Swift 6.4:
+
+- `swift test`: **313 tests passed**. `ExternalLinksTests` cover Slack's workspace, app, file and bare links, over http and in capitals; its OAuth and OpenID pages, which stay so **Sign in with Slack** works; and look-alikes that stay, such as `notslack.com`, `slack.com.example.org`, `slack.com` in a path, and a file URL.
+- **Where macOS sends them:** `NSWorkspace.urlForApplication(toOpen:)` answered the default browser, Safari, for `https://acme.slack.com/archives/…` and `https://app.slack.com/client/…`; Slack.app claims only `slack://`. So the default browser opens them, and Slack's page offers its app.
+- Not verified: clicking a Slack link from each place in the running app (the terminal, a page, a new window, **Resources**, Compass and the address bar). Opening one would have brought the Mac's own browser and Slack forward.
+
+## Splits (unreleased)
+
+Validated on 2026-10-29 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
+
+- `swift test`: **310 tests passed**. `PaneSplitsTests` cover reading `layouts` into each pane's share of its tab, from an area that doesn't start at 0; a layout Shepherdr can't read, which leaves the rest of the snapshot; which shells show inside a session (beside an agent, or after the first shell of a tab of shells); and `pane split`'s arguments, with `--machine` and without `--cwd`, refusing option-like values.
+- **What Herdr answers**, in a server of its own (a temporary `HOME`, `HERDR_*` unset): `pane split w1:p1 --direction right` and `--direction down` answer `pane_info` with the new pane; `api snapshot` carries `layouts` with each tab's `area`, the panes' `rect` and the split tree; `terminal session control` takes `--cols` and `--rows`.
+- **End to end**, a copy of the app with its own bundle identifier, launched with `open -g` against that server and driven through its menus with accessibility. The tab held one pane reporting itself as `claude`:
+  - **Split Right** made `w1:p4` to its right in the same folder, and the app attached both terminals in control mode. **Close Split** turned on, since the new pane had the keyboard.
+  - **Split Down** split `w1:p4`, the pane with the keyboard, not the session's own, and attached the new pane at its own size (55 × 18).
+  - **Close Split** closed that shell at once, at its prompt; its terminal was released, and the session's own pane took the keyboard again.
+  - With `sleep 300` running in a new split, **Close Split** left it open, waiting for the confirmation.
+- **Slow refreshes** (2026-10-30). On a Mac with a remote whose `api snapshot` took about 11 seconds, a split showed, and a closed one left, only after every machine answered. `ClusterStoreTests` now check that closing a pane reads only its machine, under a second while a refresh waits on a slow remote; that an answer asked for before the close doesn't bring the pane back; and that a closed pane leaves before its machine answers. End to end, with a wrapper that delays `machine list` by 8 seconds, **Split Right** took 11.6 s to show the new pane in the build before the fix and 1.4 s after it, counting the menu polling.
+- **A shell that exits** (2026-10-31). In a server of its own, `exit` typed through `terminal session control` into a split's shell made Herdr send `terminal.closed` with `terminal <id> exited` and close the pane; attaching again answered `terminal target <id> not found`. Shepherdr took the first as a dropped connection, reconnected, and showed the second as an error until the next refresh. `TerminalTests` now check that neither reason is retried and that both report the end once, while a dropped connection still reconnects; `ClusterStoreTests` that a pane that ended on its own leaves before its machine answers, without asking Herdr to close anything.
+- Not verified: the panes on screen (a background copy's window can't be captured), clicking a pane to work in it, **⌘W** (keys can't reach a background app's terminal), and splitting on another machine.
+
+## Name prompts start with the current name (unreleased)
+
+Validated on 2026-10-28 on macOS 26.6.2 with Xcode 27 / Swift 6.4, for [#7](https://github.com/theam/shepherdr/issues/7):
+
+- **The cause, in a minimal app** with the same alert as **Rename Session**: an `@Observable` model with an optional prompt, and an alert whose `TextField` binds to the prompt's name. The app presented ten prompts in a row and closed each one by pressing its **Rename** or **Cancel** button in process, with no HID events. It read the field as each prompt opened. Some presentations focused or edited the field first. The field often came up empty after an earlier prompt was dismissed; one alert didn't show at all. And when an empty field was edited, **Rename** took only the typed text, which would have renamed a session to it.
+- **The fix:** the same app with `.id(prompt.id)` on the field. All ten prompts showed their names, the edits were committed as typed, and every alert appeared. **Rename Group** and **New Group** use the same pattern and got the same fix.
+- `xcodebuild … build` built the app.
+- Not verified: the alerts inside Shepherdr itself. SwiftUI alerts aren't in the accessibility tree, so a background scratch copy can't read their field.
+
+## Agents wait for a fully awake Mac (0.9.0)
 
 Validated on 2026-10-20 on an Apple Silicon MacBook with macOS 26.6.2, Xcode 27 / Swift 6.4 and Herdr 0.9.3:
 
@@ -10,7 +42,7 @@ Validated on 2026-10-20 on an Apple Silicon MacBook with macOS 26.6.2, Xcode 27 
 - **End to end, in a scratch home**, as for Compass below: a Herdr server of its own (`HOME=/tmp/shep-wake`), a stand-in `claude` that reports itself with `pane report-agent` and writes the day's page, and a copy of the app with its own bundle identifier, launched with `open -g` at 12:42:51. The 12:00 run, the day's first, was due. The monitor logged a path, then `api.anthropic.com` being looked up, then agents allowed 6 ms later. The agent started at 12:42:53 and was ready at 12:42:56; the prompt came at 12:43:13, the 15 seconds plus the next refresh. The page changed and the run ended `updated`, with its copy `days/2026-10-20/12-00.html`. The user's `default` session and app were never touched.
 - Not verified: a real dark wake, which can't be caused without putting the Mac to sleep, and a sleep or a lost network while the app starts an agent. The restart before the first prompt is covered by the tests and the harness only. The Courier's waits (deliveries to agents on this Mac, sessions requested on it, a request discarded meanwhile not starting) and typing in Compass's terminal counting once you leave it were checked by reading the code only.
 
-## Compass (unreleased)
+## Compass (0.8.6)
 
 Validated on 2026-10-15 on Apple Silicon with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
 

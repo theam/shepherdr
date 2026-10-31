@@ -21,6 +21,10 @@ public final class ClusterStore {
     /// Workspaces asked about, including those outside a repository.
     @ObservationIgnored private var knownWorkspaces = Set<String>()
     @ObservationIgnored private var learning: Task<Void, Never>?
+    /// Every snapshot asked for gets the next number; each machine shows the answer to its latest
+    /// ask, so an answer that took longer never replaces a newer one.
+    @ObservationIgnored private var asks = 0
+    @ObservationIgnored private var shownAsk: [String: Int] = [:]
 
     public init(client: any HerdrClient = CLIHerdrClient()) { self.client = client }
 
@@ -106,13 +110,13 @@ public final class ClusterStore {
     /// Starts an agent in a pane that has none, such as Compass's after its agent exited.
     public func startAgent(_ name: String, kind: String, paneID: String, onMachine id: String) async throws -> String? {
         let notice = try await client.startAgent(name, kind: kind, paneID: paneID, on: try machine(id))
-        await refreshAfterChange()
+        await refreshAfterChange(on: id)
         return notice
     }
 
     public func renameWorkspace(_ workspaceID: String, to name: String, onMachine id: String) async throws {
         try await client.renameWorkspace(workspaceID, to: name, on: try machine(id))
-        await refreshAfterChange()
+        await refreshAfterChange(on: id)
     }
 
     /// Asks every machine and reads the catalog, such as when you refresh or come back to the window.
@@ -138,7 +142,7 @@ public final class ClusterStore {
         let wasEnabled = Set(machines.filter(\.machine.isEnabled).map(\.id))
         enum Update: Sendable {
             case catalog(Result<[Machine], HerdrFailure>)
-            case snapshot(String, Result<MachineSnapshot, HerdrFailure>)
+            case snapshot(String, ask: Int, Result<MachineSnapshot, HerdrFailure>)
             case cancelled
         }
         let client = client
@@ -148,10 +152,11 @@ public final class ClusterStore {
             for index in machines.indices where machines[index].machine.isEnabled && due?.contains(machines[index].id) != false {
                 let machine = machines[index].machine
                 scheduled.insert(machine.id)
+                let ask = nextAsk()
                 group.addTask {
-                    do { return .snapshot(machine.id, .success(try await client.snapshot(for: machine))) }
+                    do { return .snapshot(machine.id, ask: ask, .success(try await client.snapshot(for: machine))) }
                     catch is CancellationError { return .cancelled }
-                    catch { return .snapshot(machine.id, .failure(Self.failure(error))) }
+                    catch { return .snapshot(machine.id, ask: ask, .failure(Self.failure(error))) }
                 }
             }
             schedule.didAsk(scheduled, catalog: readsCatalog, at: now)
@@ -189,31 +194,18 @@ public final class ClusterStore {
                         guard due?.contains(machine.id) != false || !wasEnabled.contains(machine.id),
                               scheduled.insert(machine.id).inserted else { continue }
                         schedule.didAsk([machine.id], catalog: false, at: now)
+                        let ask = nextAsk()
                         group.addTask {
-                            do { return .snapshot(machine.id, .success(try await client.snapshot(for: machine))) }
+                            do { return .snapshot(machine.id, ask: ask, .success(try await client.snapshot(for: machine))) }
                             catch is CancellationError { return .cancelled }
-                            catch { return .snapshot(machine.id, .failure(Self.failure(error))) }
+                            catch { return .snapshot(machine.id, ask: ask, .failure(Self.failure(error))) }
                         }
                     }
                 case .catalog(.failure(let failure)):
                     discoveryFailure = failure
                     schedule.catalogFailed = true
-                case .snapshot(let id, let result):
-                    guard let index = machines.firstIndex(where: { $0.id == id }),
-                          machines[index].machine.isEnabled else { continue }
-                    var state = machines[index]
-                    switch result {
-                    case .success(let snapshot):
-                        state.snapshot = snapshot
-                        state.connection = .online
-                        state.failure = nil
-                        lastSuccess[id] = Date()
-                    case .failure(let failure):
-                        state.connection = failure.state
-                        state.failure = failure
-                    }
-                    // Most refreshes find nothing new: then nothing that reads machines redraws.
-                    if state != machines[index] { machines[index] = state }
+                case .snapshot(let id, let ask, let result):
+                    show(result, of: id, ask: ask)
                 case .cancelled: break
                 }
             }
@@ -224,17 +216,58 @@ public final class ClusterStore {
         }
     }
 
+    private func nextAsk() -> Int {
+        asks += 1
+        return asks
+    }
+
+    private func show(_ result: Result<MachineSnapshot, HerdrFailure>, of id: String, ask: Int) {
+        guard let index = machines.firstIndex(where: { $0.id == id }), machines[index].machine.isEnabled,
+              ask > shownAsk[id, default: 0] else { return }
+        shownAsk[id] = ask
+        var state = machines[index]
+        switch result {
+        case .success(let snapshot):
+            state.snapshot = snapshot
+            state.connection = .online
+            state.failure = nil
+            lastSuccess[id] = Date()
+        case .failure(let failure):
+            state.connection = failure.state
+            state.failure = failure
+        }
+        // Most refreshes find nothing new: then nothing that reads machines redraws.
+        if state != machines[index] { machines[index] = state }
+    }
+
     // MARK: Changes requested by the user
 
     public func createSession(_ request: NewSessionRequest, onMachine id: String) async throws -> CreatedSession {
         let created = try await client.createSession(request, on: try machine(id))
-        await refreshAfterChange()
+        await refreshAfterChange(on: id)
         return created
     }
 
     public func closeSession(paneID: String, onMachine id: String) async throws {
         try await client.closeSession(paneID: paneID, on: try machine(id))
-        await refreshAfterChange()
+        await paneClosed(paneID, onMachine: id)
+    }
+
+    /// A pane Herdr no longer has, closed from here or ended on its own, such as a shell you typed
+    /// `exit` in: it leaves at once, without waiting for the machine to answer again.
+    public func paneClosed(_ paneID: String, onMachine id: String) async {
+        if let index = machines.firstIndex(where: { $0.id == id }), let snapshot = machines[index].snapshot {
+            shownAsk[id] = nextAsk()
+            machines[index].snapshot = snapshot.closing(paneID: paneID)
+        }
+        await refreshAfterChange(on: id)
+    }
+
+    /// Splits a pane and returns the new one's terminal ID, once the snapshot shows it.
+    public func splitPane(_ paneID: String, _ direction: SplitDirection, directory: String?, onMachine id: String) async throws -> String {
+        let terminalID = try await client.splitPane(paneID, direction, directory: directory, on: try machine(id))
+        await refreshAfterChange(on: id)
+        return terminalID
     }
 
     public func addMachine(_ request: NewMachineRequest) async throws {
@@ -259,6 +292,21 @@ public final class ClusterStore {
             throw HerdrFailure(.unreachable, "That machine is no longer in Herdr's catalog.")
         }
         return state.machine
+    }
+
+    /// Reads a machine again after a change there, at once: a refresh in flight may be waiting on a
+    /// slow remote, and an answer it brings, asked for before the change, won't replace this one.
+    private func refreshAfterChange(on id: String) async {
+        guard let machine = try? machine(id), machine.isEnabled else { return }
+        let ask = nextAsk()
+        let result: Result<MachineSnapshot, HerdrFailure>
+        do { result = .success(try await client.snapshot(for: machine)) }
+        catch is CancellationError { return }
+        catch { result = .failure(Self.failure(error)) }
+        show(result, of: id, ask: ask)
+        // What follows a refresh, such as keeping holds, follows a change too.
+        lastRefresh = Date()
+        learnCheckouts()
     }
 
     /// A refresh already in flight may have started before the change; wait for it, then read again.
