@@ -4,6 +4,7 @@ public struct TerminalPane: Identifiable, Equatable, Sendable {
     public let terminalID: String
     public let paneID: String
     public let workspaceID: String
+    public let tabID: String
     public let workspaceName: String
     public let title: String
     /// The pane's foreground working directory, else the one it started in.

@@ -75,7 +75,7 @@ App/                              SwiftUI presentation: queue sidebar, work area
 Sources/ShepherdrCore/
   Transport/                      CLI adapters, executable discovery, bounded process/stream transports, agent tools and mailbox, Compass's folder and Git
   DTO/                            JSON wire types, validation and domain mapping
-  Domain/                         Machine, Workspace, Agent, lifecycle and failure models, project gathering, letters and machine lists, Compass's schedule, settings and actions, readiness to start agents, the GitHub inbox and its suggested order
+  Domain/                         Machine, Workspace, Agent, lifecycle and failure models, project gathering, letters and machine lists, Compass's schedule, settings and actions, readiness to start agents, the GitHub inbox and its suggested order, how a Herdr tab lays out its panes and which shells show inside a session
   Store/                          MainActor cluster state, local priorities, groups, project headings and holds, terminal connections, agent tools and mail, the GitHub inbox's repositories
   Resources/AgentTools/           The shepherdr command and skill installed on each machine
   Resources/Updater/              The script that replaces the app with a new release

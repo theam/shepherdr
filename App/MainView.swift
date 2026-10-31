@@ -122,6 +122,13 @@ struct MainView: View {
         } message: { id in
             Text(closeMessage(id))
         }
+        .confirmationDialog("Close this split?", isPresented: Binding { model.closingSplit != nil } set: { if !$0 { model.closingSplit = nil } },
+                            titleVisibility: .visible, presenting: model.closingSplit) { id in
+            Button("Close Split", role: .destructive) { Task { await model.closeSplit(id) } }
+            Button("Cancel", role: .cancel) { model.closingSplit = nil }
+        } message: { id in
+            Text(closeSplitMessage(id))
+        }
         .alert(model.actionFailure?.message ?? "", isPresented: Binding { model.actionFailure != nil } set: { if !$0 { model.actionFailure = nil } }) {
             Button("OK") { model.actionFailure = nil }
         } message: {
@@ -167,6 +174,12 @@ struct MainView: View {
         let what = context.agent.map { "ends \($0.agent.program.name) and closes" } ?? "closes"
         return "This \(what) pane \(context.paneID) in Herdr\(context.machine.machine.isLocal ? "" : " on \(context.machine.machine.name)"). "
             + "If it is the workspace's last pane, the workspace closes too. This cannot be undone."
+    }
+
+    private func closeSplitMessage(_ id: Agent.ID) -> String {
+        guard let context = model.context(for: id) else { return "" }
+        let what = context.agent.map { "\($0.agent.program.name) runs" } ?? "A command may be running"
+        return "\(what) in pane \(context.paneID). Closing the split ends it in Herdr. This cannot be undone."
     }
 
     private func configureRefresh() {

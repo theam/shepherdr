@@ -109,8 +109,15 @@ public struct TerminalSurface: NSViewRepresentable {
     let holder: TerminalHolder
     let palette: TerminalPalette
     let font: NSFont
-    /// Changing this gives the terminal keyboard focus.
+    /// Changing this gives the terminal keyboard focus, if it takes focus.
     let focusRequest: Int
+    /// Whether focus requests and showing it give it the keyboard: one of several terminals shown
+    /// side by side gets it only when it is the one you work in.
+    let takesFocus: Bool
+    /// You pressed the mouse in the terminal, which then has the keyboard.
+    let onFocus: (() -> Void)?
+    /// ⌘W while it has the keyboard closes it, rather than the window; nil leaves ⌘W to the window.
+    let onClose: (() -> Void)?
     /// Opens a clicked link or file; `external` asks for the default browser or app instead of Shepherdr's own.
     let openLink: (_ url: URL, _ external: Bool) -> Void
     /// The existing local file a printed path names, if any.
@@ -123,6 +130,7 @@ public struct TerminalSurface: NSViewRepresentable {
     let onDropFiles: ((_ files: [URL]) -> Void)?
 
     public init(holder: TerminalHolder, palette: TerminalPalette, font: NSFont, focusRequest: Int = 0,
+                takesFocus: Bool = true, onFocus: (() -> Void)? = nil, onClose: (() -> Void)? = nil,
                 resolveFile: @escaping (_ path: String) -> URL? = { _ in nil },
                 resolveSession: @escaping (_ row: [Character], _ column: Int) -> URL? = { _, _ in nil },
                 onResources: @escaping (_ found: [SessionResource]) -> Void = { _ in },
@@ -132,6 +140,9 @@ public struct TerminalSurface: NSViewRepresentable {
         self.palette = palette
         self.font = font
         self.focusRequest = focusRequest
+        self.takesFocus = takesFocus
+        self.onFocus = onFocus
+        self.onClose = onClose
         self.resolveFile = resolveFile
         self.resolveSession = resolveSession
         self.onResources = onResources
@@ -150,6 +161,8 @@ public struct TerminalSurface: NSViewRepresentable {
         view.resolveSession = resolveSession
         view.onResources = onResources
         view.onDropFiles = onDropFiles
+        view.onPress = onFocus
+        view.onClose = onClose
         if holder.palette != palette {
             holder.palette = palette
             Self.apply(palette, to: view)
@@ -164,9 +177,10 @@ public struct TerminalSurface: NSViewRepresentable {
             holder.mounted()
         }
         // Shown, it takes the keyboard, as it does when asked to.
-        if context.coordinator.focusRequest != focusRequest {
+        if context.coordinator.focusRequest != focusRequest || context.coordinator.takesFocus != takesFocus {
             context.coordinator.focusRequest = focusRequest
-            DispatchQueue.main.async { [weak view] in view?.window?.makeFirstResponder(view) }
+            context.coordinator.takesFocus = takesFocus
+            if takesFocus { DispatchQueue.main.async { [weak view] in view?.window?.makeFirstResponder(view) } }
         }
     }
 
@@ -196,6 +210,7 @@ public struct TerminalSurface: NSViewRepresentable {
     @MainActor public final class Coordinator {
         weak var holder: TerminalHolder?
         var focusRequest: Int?
+        var takesFocus: Bool?
     }
 
     /// What SwiftTerm tells the terminal: sizes and keys go to the store.
@@ -247,6 +262,10 @@ public final class ConsoleTerminalView: SwiftTerm.TerminalView {
     var onClick: ((_ column: Int, _ row: Int) -> Void)?
     /// The view joined or left a window: whether it can be seen may have changed.
     var onWindowChange: (() -> Void)?
+    /// The mouse went down in the terminal.
+    var onPress: (() -> Void)?
+    /// ⌘W closes the terminal, when set.
+    var onClose: (() -> Void)?
     /// Lines the wheel turned that are not sent yet; fractions wait for more turning.
     private var pendingScroll: CGFloat = 0
     private var scrollSendScheduled = false
@@ -607,6 +626,7 @@ public final class ConsoleTerminalView: SwiftTerm.TerminalView {
         let point = convert(event.locationInWindow, from: nil)
         if event.type == .leftMouseDown {
             guard event.window === window, !isHiddenOrHasHiddenAncestor, bounds.contains(point) else { return }
+            onPress?()
             // A double click's second press can come before the first one is wrapped up.
             if heldFrames == nil {
                 heldFrames = []
@@ -666,8 +686,14 @@ public final class ConsoleTerminalView: SwiftTerm.TerminalView {
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.activeInKeyWindow, .mouseMoved, .inVisibleRect],
                                        owner: tracker))
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.window === self.window, self.window?.firstResponder === self,
-                  let bytes = Self.sequence(for: event) else { return event }
+            guard let self, event.window === self.window, self.window?.firstResponder === self else { return event }
+            // Before the menu's Close does: here ⌘W closes a split, not the window.
+            if let onClose, event.modifierFlags.intersection([.shift, .control, .option, .command]) == .command,
+               event.charactersIgnoringModifiers?.lowercased() == "w" {
+                onClose()
+                return nil
+            }
+            guard let bytes = Self.sequence(for: event) else { return event }
             self.terminalDelegate?.send(source: self, data: bytes[...])
             return nil
         }

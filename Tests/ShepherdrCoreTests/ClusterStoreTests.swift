@@ -115,6 +115,76 @@ import Foundation
         #expect(count == 1)
     }
 
+    @Test func aChangeShowsWithoutWaitingForASlowRemote() async throws {
+        let client = MockHerdrClient()
+        await client.setCatalog(.success([Fixture.remote]))
+        await client.set(.local, .success(try Fixture.snapshot()))
+        await client.set(Fixture.remote, .success(try Fixture.snapshot(machine: Fixture.remote)))
+        let store = ClusterStore(client: client)
+        await store.refresh()
+        await client.set(Fixture.remote, .success(try Fixture.snapshot(machine: Fixture.remote)), delay: .seconds(5))
+        let slow = Task { await store.refresh() }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(store.isRefreshing)
+        let started = ContinuousClock.now
+        try await store.closeSession(paneID: "w1:p1", onMachine: "local")
+        #expect(started.duration(to: .now) < .seconds(1))
+        #expect(await client.snapshotCalls().suffix(1) == ["local"])
+        slow.cancel()
+        await slow.value
+    }
+
+    @Test func anAnswerAskedBeforeAChangeNeverReplacesIt() async throws {
+        let client = MockHerdrClient()
+        let before = try Fixture.snapshot()
+        await client.set(.local, .success(before))
+        let store = ClusterStore(client: client)
+        await store.refresh()
+        // A refresh asks while the pane is still there, and answers after the change.
+        await client.set(.local, .success(before), delay: .milliseconds(400))
+        let late = Task { await store.refresh() }
+        try await Task.sleep(for: .milliseconds(50))
+        let after = before.closing(paneID: "w1:p1")
+        await client.set(.local, .success(after))
+        try await store.closeSession(paneID: "w1:p1", onMachine: "local")
+        #expect(!store.agents.contains { $0.agent.paneID == "w1:p1" })
+        await late.value
+        #expect(!store.agents.contains { $0.agent.paneID == "w1:p1" })
+        #expect(store.machines[0].snapshot == after)
+    }
+
+    @Test func aClosedPaneLeavesBeforeItsMachineAnswers() async throws {
+        let client = MockHerdrClient()
+        await client.setCatalog(.success([Fixture.remote]))
+        await client.set(.local, .success(try Fixture.snapshot()))
+        await client.set(Fixture.remote, .success(try Fixture.snapshot(machine: Fixture.remote)))
+        let store = ClusterStore(client: client)
+        await store.refresh()
+        await client.set(Fixture.remote, .success(try Fixture.snapshot(machine: Fixture.remote)), delay: .seconds(5))
+        let close = Task { try await store.closeSession(paneID: "w1:p1", onMachine: Fixture.remote.id) }
+        for _ in 0..<100 where store.agents.contains(where: { $0.id.machineID == Fixture.remote.id && $0.agent.paneID == "w1:p1" }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(store.agents.filter { $0.id.machineID == Fixture.remote.id }.count == 3)
+        close.cancel()
+        _ = try? await close.value
+    }
+
+    @Test func aPaneThatEndedOnItsOwnLeavesWithoutClosingAnything() async throws {
+        let client = MockHerdrClient()
+        let before = try Fixture.snapshot()
+        await client.set(.local, .success(before))
+        let store = ClusterStore(client: client)
+        await store.refresh()
+        await client.set(.local, .success(before.closing(paneID: "w1:p1")), delay: .milliseconds(300))
+        let ended = Task { await store.paneClosed("w1:p1", onMachine: "local") }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!store.agents.contains { $0.agent.paneID == "w1:p1" })
+        await ended.value
+        #expect(await client.recordedChanges().isEmpty)
+        #expect(await client.snapshotCalls().suffix(1) == ["local"])
+    }
+
     @Test func testMissingHerdrProducesUsefulState() async {
         let client = MockHerdrClient()
         let failure = HerdrFailure(.notInstalled, "Install Herdr, then refresh.")
