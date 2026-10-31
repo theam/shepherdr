@@ -1,21 +1,17 @@
 Native macOS console for herding your coding agents across your Herdr machines: one prioritized queue, the real terminal of every session, a browser per session, and a notification when it's your turn.
 
-### What's new in 0.9.0
+### What's new in 0.9.1
 
 From 0.8.7 on, Shepherdr offers this version itself, at the foot of the sidebar.
 
-- **A GitHub inbox in the overview.** The **GITHUB** tab lists the reviews requested from you, your assigned issues and your pull requests, with their checks, from the repositories you follow under **REPOS…** and those your sessions work in. A dot marks what changed since you looked. **SUGGEST ORDER** numbers your pull requests in the order to take them: merge, review, address changes, resolve conflicts, fix checks.
-- **Start work from the inbox.** An issue offers **IMPLEMENT** and a pull request **REVIEW**, each opening New Session in its own worktree with a prompt ready. Once a session works on it, the button reads **OPEN** and takes you there. **⌘T** also finds sessions by their pull requests, issues and repository, as in `owner/repo#12`, and the overview's cards show their pull requests like the queue does.
-- **Sessions stay as you left them.** Switching no longer reloads a session's terminal and browser from scratch. Shepherdr keeps the ones you visit most, and lets go of the rest only when there are many or macOS runs short of memory.
-- **A coffee cup keeps this Mac awake,** so agents working here don't pause when it would doze off. Click it in the sidebar's footer, or right-click it to keep the screen on too. It's off every time Shepherdr opens.
-- **One status everywhere.** The queue, the overview, ⌘T, the relations panel and Compass agree on each session's status. A session on hold shows its agent's state again once everything it waits for has finished, instead of **READY**. Holds are also kept in Herdr, so another Mac gets them back.
-- **Handoffs and closes are your call.** Agents hand off only when you ask, and every session close an agent asks for waits for your **CLOSE**. A session an agent starts keeps it on hold until it finishes. Your machines are offered the updated agent tools.
-- **Compass starts its agent only with this Mac fully awake and online,** so a run that falls in a dark wake no longer starts Claude Code without its claude.ai connectors. Its column says what the run waits for.
-- **Fewer questions to GitHub.** What Shepherdr learns about pull requests, issues and their checks is kept for later launches, so it doesn't ask again for what it already knows.
+- **Split a session's terminal.** **⌘D** opens a shell beside the pane you work in and **⇧⌘D** one below it, in the same folder; splits made in Herdr show the same way. Click a pane to work in it. **⌘W**, or `exit` in its shell, closes it.
+- **Dictation moves to ⇧⌘M,** since ⇧⌘D now splits the terminal.
+- **Changes show at once.** A session you create, split, close, rename or start an agent in no longer waits for every machine to answer, so a slow remote doesn't hold up the rest.
+- **Slack links open in your default browser,** where Slack offers its app, instead of in the session's browser. **Sign in with Slack** still works in a page.
 
 ### Fixed
 
-- Shepherdr could freeze for good when it rested or closed a terminal that was still connecting.
+- **Rename Session** showed an empty name after the first rename, and sometimes didn't appear. **Rename Group** and **New Group** had the same problem.
 
 ### Download and install
 

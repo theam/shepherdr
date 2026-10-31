@@ -1,6 +1,6 @@
 # Verification
 
-## Slack links leave the browser (unreleased)
+## Slack links leave the browser (0.9.1)
 
 Validated on 2026-10-31 on macOS 26.6.2 with Xcode 27 / Swift 6.4:
 
@@ -8,7 +8,7 @@ Validated on 2026-10-31 on macOS 26.6.2 with Xcode 27 / Swift 6.4:
 - **Where macOS sends them:** `NSWorkspace.urlForApplication(toOpen:)` answered the default browser, Safari, for `https://acme.slack.com/archives/…` and `https://app.slack.com/client/…`; Slack.app claims only `slack://`. So the default browser opens them, and Slack's page offers its app.
 - Not verified: clicking a Slack link from each place in the running app (the terminal, a page, a new window, **Resources**, Compass and the address bar). Opening one would have brought the Mac's own browser and Slack forward.
 
-## Splits (unreleased)
+## Splits (0.9.1)
 
 Validated on 2026-10-29 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
 
@@ -23,7 +23,7 @@ Validated on 2026-10-29 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.
 - **A shell that exits** (2026-10-31). In a server of its own, `exit` typed through `terminal session control` into a split's shell made Herdr send `terminal.closed` with `terminal <id> exited` and close the pane; attaching again answered `terminal target <id> not found`. Shepherdr took the first as a dropped connection, reconnected, and showed the second as an error until the next refresh. `TerminalTests` now check that neither reason is retried and that both report the end once, while a dropped connection still reconnects; `ClusterStoreTests` that a pane that ended on its own leaves before its machine answers, without asking Herdr to close anything.
 - Not verified: the panes on screen (a background copy's window can't be captured), clicking a pane to work in it, **⌘W** (keys can't reach a background app's terminal), and splitting on another machine.
 
-## Name prompts start with the current name (unreleased)
+## Name prompts start with the current name (0.9.1)
 
 Validated on 2026-10-28 on macOS 26.6.2 with Xcode 27 / Swift 6.4, for [#7](https://github.com/theam/shepherdr/issues/7):
 
