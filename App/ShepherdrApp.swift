@@ -90,7 +90,7 @@ struct ShepherdrApp: App {
                     .keyboardShortcut("o", modifiers: [.command, .shift])
                     .disabled(model.selectedID?.machineID != Machine.local.id)
                 Button(model.dictation.isRecording ? "Stop Dictation" : "Dictate Prompt") { model.toggleDictation() }
-                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
                     .disabled(model.focusedID == nil && !model.dictation.isRecording)
                 Button(model.activeTerminal?.mode == .observe ? "Unlock Session" : "Lock Session (Read-Only)") { model.toggleLive() }
                     .keyboardShortcut("e", modifiers: .command)
@@ -98,6 +98,16 @@ struct ShepherdrApp: App {
                 Button("Send Escape") { model.activeTerminal?.press(.escape) }
                     .keyboardShortcut(.escape, modifiers: .command)
                     .disabled(model.activeTerminal?.status != .interactive)
+                Divider()
+                Button("Split Right") { model.split(.right) }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(!model.canSplit)
+                Button("Split Down") { model.split(.down) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .disabled(!model.canSplit)
+                // ⌘W in a split closes it; the menu's Close keeps closing the window.
+                Button("Close Split") { if let id = model.selectedID { model.requestCloseSplit(model.focusedPane(in: id)) } }
+                    .disabled(model.mode != .agents || model.selectedID.map { model.focusedPane(in: $0) == $0 } ?? true)
                 Divider()
                 ForEach(0..<9, id: \.self) { position in
                     Button(Self.sessionTitle(position, in: rows)) { model.open(position: position) }

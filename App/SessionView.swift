@@ -4,16 +4,21 @@ import ShepherdrCore
 import ShepherdrDictation
 import ShepherdrTerminalUI
 
-/// One session in the work area: its live terminal and a composer for the next prompt.
-/// The view is identified by its terminal target, so refreshes never reconnect it.
+/// One session in the work area: its live terminal and a composer for the next prompt. When its
+/// Herdr tab is split, it shows every pane of the tab, and the composer and the controls act on
+/// the one you work in. The view is identified by its terminal target, so refreshes never
+/// reconnect it.
 struct SessionView: View {
     let context: SessionContext
     @Bindable var model: AppModel
     /// Survives switching sessions: the prompt editor's state and the browser's tabs.
     let workspace: SessionWorkspace
-    /// Kept by the model while the session is out of sight, with what it last showed.
+    /// The session's own terminal, kept by the model while the session is out of sight, with what
+    /// it last showed.
     private let holder: TerminalHolder
-    private var terminal: TerminalStore { holder.store }
+    private let mode: TerminalMode
+    /// The terminal you work in: the session's own, or the split you last clicked.
+    private var terminal: TerminalStore { holder(for: paneID).store }
     @ViewState<Bool> private var showDetails = false
     @ViewState<CGFloat> private var editorHeight: CGFloat = 60
     @AppStorage("terminalFontSize") private var fontSize = 13.0
@@ -29,9 +34,18 @@ struct SessionView: View {
         self.isCompass = isCompass
         workspace = model.workspace(for: Agent.ID(machineID: context.machine.id, terminalID: context.target.terminalID))
         holder = model.terminal(for: context, mode: mode)
+        self.mode = mode
     }
 
     private var id: Agent.ID { .init(machineID: context.machine.id, terminalID: context.target.terminalID) }
+    /// The pane you work in.
+    private var paneID: Agent.ID { model.focusedPane(in: id) }
+
+    /// A pane's terminal: the session's own, or one of its splits'.
+    private func holder(for pane: Agent.ID) -> TerminalHolder {
+        guard pane != id, let context = model.context(for: pane) else { return holder }
+        return model.terminal(for: context, mode: mode)
+    }
     private var isLive: Bool { terminal.status == .interactive }
 
     var body: some View {
@@ -50,14 +64,15 @@ struct SessionView: View {
         }
         .background(Theme.background)
         .onAppear { model.activeTerminal = terminal }
+        .onChange(of: paneID) { model.activeTerminal = terminal }
         .onDisappear {
             // What you typed in Compass's terminal still counts off screen, such as against starting its agent again.
-            if isCompass, let input = terminal.lastInput { model.compass.noteTyping(at: input) }
+            if isCompass, let input = holder.store.lastInput { model.compass.noteTyping(at: input) }
             if model.activeTerminal === terminal { model.activeTerminal = nil }
         }
         .task(id: id) {
             // Once the terminal is attached: Herdr refuses an attach while a read of the pane runs.
-            for _ in 0..<50 where terminal.status == .connecting || terminal.status == .disconnected {
+            for _ in 0..<50 where holder.store.status == .connecting || holder.store.status == .disconnected {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             await model.harvestResources(for: id)
@@ -69,20 +84,7 @@ struct SessionView: View {
             VStack(spacing: 0) {
                 banners
                 if context.canConnect {
-                    TerminalSurface(holder: holder, palette: Theme.terminal,
-                                    font: ConsoleFonts.font(family: fontFamily, size: fontSize, ligatures: ligatures),
-                                    focusRequest: model.terminalFocusRequest,
-                                    resolveFile: { [model, id] path in model.file(at: path, for: id) },
-                                    resolveSession: { [model, id] row, column in model.sessionLink(in: row, column: column, from: id) },
-                                    onResources: { [model, id] found in model.collectResources(found, for: id) },
-                                    onDropFiles: { [model, id, terminal] files in model.drop(files, into: id, terminal: terminal) }
-                    ) { [model, id] url, external in
-                        model.openLink(url, from: id, external: external)
-                    }
-                    .padding(.leading, 10).padding(.top, 6)
-                    .background(Theme.background)
-                    .overlay { if terminal.status == .connecting { connecting } }
-                    .overlay(alignment: .bottomTrailing) { HistoryBadge(terminal: terminal) }
+                    if let split = model.split(of: id) { panes(split) } else { surface(of: id, split: false) }
                 } else {
                     offline
                 }
@@ -92,6 +94,56 @@ struct SessionView: View {
         } browser: {
             BrowserPanel(browser: workspace.browser)
         }
+    }
+
+    /// A pane's terminal. Its links open in the session's browser, and what it shows counts toward
+    /// the session's resources.
+    private func surface(of pane: Agent.ID, split: Bool) -> some View {
+        let holder = holder(for: pane)
+        let store = holder.store
+        return TerminalSurface(holder: holder, palette: Theme.terminal,
+                               font: ConsoleFonts.font(family: fontFamily, size: fontSize, ligatures: ligatures),
+                               focusRequest: model.terminalFocusRequest, takesFocus: pane == paneID,
+                               onFocus: split ? { [model, id] in model.focusPane(pane, in: id) } : nil,
+                               onClose: split && pane != id ? { [model] in model.requestCloseSplit(pane) } : nil,
+                               resolveFile: { [model] path in model.file(at: path, for: pane) },
+                               resolveSession: { [model] row, column in model.sessionLink(in: row, column: column, from: pane) },
+                               onResources: { [model, id] found in model.collectResources(found, for: id) },
+                               onDropFiles: { [model] files in model.drop(files, into: pane, terminal: store) }
+        ) { [model, id] url, external in
+            model.openLink(url, from: id, external: external)
+        }
+        .padding(.leading, split ? 6 : 10).padding(.top, split ? 4 : 6)
+        .background(Theme.background)
+        .overlay { if store.status == .connecting { connecting } }
+        .overlay(alignment: .bottomTrailing) { HistoryBadge(terminal: store) }
+    }
+
+    /// The session's tab as Herdr lays it out: each pane in its part of the area, a line between
+    /// them, and the one you work in outlined.
+    private func panes(_ split: [SplitPane]) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                ForEach(split) { pane in
+                    let paneID = Agent.ID(machineID: id.machineID, terminalID: pane.terminalID)
+                    let frame = Self.place(pane.frame, in: geometry.size)
+                    surface(of: paneID, split: true)
+                        .overlay { Rectangle().strokeBorder(Theme.phosphor.opacity(paneID == self.paneID ? 0.55 : 0), lineWidth: 1) }
+                        .frame(width: frame.width, height: frame.height)
+                        .position(x: frame.midX, y: frame.midY)
+                }
+            }
+        }
+        .background(Theme.line)
+    }
+
+    /// A pane's part of the area in points, half a point short on each side it shares with another
+    /// pane, so a line shows between them.
+    static func place(_ part: CGRect, in size: CGSize) -> CGRect {
+        let inner = (left: part.minX > 0.001, top: part.minY > 0.001, right: part.maxX < 0.999, bottom: part.maxY < 0.999)
+        let minX = part.minX * size.width + (inner.left ? 0.5 : 0), maxX = part.maxX * size.width - (inner.right ? 0.5 : 0)
+        let minY = part.minY * size.height + (inner.top ? 0.5 : 0), maxY = part.maxY * size.height - (inner.bottom ? 0.5 : 0)
+        return CGRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
     }
 
     @ViewBuilder private var banners: some View {
@@ -690,7 +742,7 @@ struct DictationButton: View {
                 }
                 .buttonStyle(ConsoleButtonStyle(tint: Theme.red, prominent: true))
                 .fixedSize()
-                .help("Stop and transcribe into the prompt editor (⇧⌘D)")
+                .help("Stop and transcribe into the prompt editor (⇧⌘M)")
                 Button { model.cancelDictation() } label: { Text("×") }
                     .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
                     .help("Discard this recording")
@@ -709,7 +761,7 @@ struct DictationButton: View {
                 .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
                 .fixedSize()
                 .disabled(!dictation.isReady)
-                .help(dictation.isReady ? "Dictate a prompt (⇧⌘D). It is transcribed on this Mac."
+                .help(dictation.isReady ? "Dictate a prompt (⇧⌘M). It is transcribed on this Mac."
                                         : "Dictation is busy with another session")
             }
         }

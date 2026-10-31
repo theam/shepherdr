@@ -493,21 +493,45 @@ private actor MockTerminalClient: HerdrTerminalClient {
         #expect(await client.requestedModes() == [.observe, .observe])
     }
 
-    @Test func aTerminalThatIsGoneIsNotRetried() async throws {
+    /// Herdr ends a terminal whose program exited, such as a shell you typed `exit` in, and refuses
+    /// to attach to one it no longer has.
+    @Test(arguments: ["terminal a exited", "terminal session control failed: terminal target a not found"])
+    func aTerminalThatIsGoneIsNotRetried(reason: String) async throws {
         let gone = MockTerminalConnection()
         let client = MockTerminalClient([gone])
         let target = TerminalTarget(machine: .local, terminalID: "a", title: "Agent", workspace: "Project")
         let store = TerminalStore(target: target, client: client,
                                   reconnecting: .init(first: .milliseconds(5), longest: .milliseconds(5), budget: .seconds(60)))
         defer { store.disconnect() }
+        var ends = 0
+        store.onGone = { ends += 1 }
         store.open()
         try await wait { store.status == .observing }
-        gone.continuation.yield(.closed("terminal attach ended: terminal a not found"))
+        gone.continuation.yield(.closed(reason))
         gone.continuation.finish()
         try await wait { store.status == .ended }
         try await Task.sleep(for: .milliseconds(30))
         #expect(store.reconnection == nil)
+        #expect(ends == 1)
         #expect(await client.requestedModes() == [.observe])
+    }
+
+    @Test func aDroppedConnectionIsNotAnEnd() async throws {
+        let dropped = MockTerminalConnection()
+        let client = MockTerminalClient([dropped, MockTerminalConnection()])
+        let target = TerminalTarget(machine: .local, terminalID: "a", title: "Agent", workspace: "Project")
+        let store = TerminalStore(target: target, client: client,
+                                  reconnecting: .init(first: .milliseconds(50), longest: .milliseconds(50), budget: .seconds(60)))
+        defer { store.disconnect() }
+        var ends = 0
+        store.onGone = { ends += 1 }
+        store.open()
+        try await wait { store.status == .observing }
+        dropped.continuation.finish()
+        try await wait { store.status == .ended }
+        try await wait { store.status == .observing }
+        #expect(ends == 0)
+        #expect(await client.requestedModes() == [.observe, .observe])
     }
 
     @Test func testControlConflictFallsBackToWatchingUntilUserTakesOver() async throws {

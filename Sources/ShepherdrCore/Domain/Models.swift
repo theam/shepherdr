@@ -110,9 +110,11 @@ public struct MachineSnapshot: Equatable, Sendable {
     public let doorbells: [String: String]
     /// The tokens Shepherdr and its tools keep on each pane, those named `shepherdr-…`, by terminal ID.
     public let tokens: [String: [String: String]]
+    /// How each tab lays out its panes, by tab ID.
+    public let layouts: [String: TabLayout]
 
     public init(version: String, protocolVersion: Int, workspaces: [Workspace], agents: [Agent], panes: [TerminalPane] = [],
-                doorbells: [String: String] = [:], tokens: [String: [String: String]] = [:]) {
+                doorbells: [String: String] = [:], tokens: [String: [String: String]] = [:], layouts: [String: TabLayout] = [:]) {
         self.version = version
         self.protocolVersion = protocolVersion
         self.workspaces = workspaces
@@ -120,6 +122,17 @@ public struct MachineSnapshot: Equatable, Sendable {
         self.panes = panes
         self.doorbells = doorbells
         self.tokens = tokens
+        self.layouts = layouts
+    }
+}
+
+extension MachineSnapshot {
+    /// The snapshot without a pane Herdr just closed, until the machine answers again.
+    public func closing(paneID: String) -> MachineSnapshot {
+        MachineSnapshot(version: version, protocolVersion: protocolVersion, workspaces: workspaces,
+                        agents: agents.filter { $0.paneID != paneID }, panes: panes.filter { $0.paneID != paneID },
+                        doorbells: doorbells, tokens: tokens,
+                        layouts: layouts.mapValues { TabLayout(tabID: $0.tabID, panes: $0.panes.filter { $0.paneID != paneID }) })
     }
 }
 

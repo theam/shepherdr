@@ -24,6 +24,8 @@ public final class TerminalStore {
     public private(set) var size = TerminalSize()
     @ObservationIgnored public var display: ((TerminalFrame) -> Void)?
     @ObservationIgnored public var resetDisplay: (() -> Void)?
+    /// Called when the terminal ended for good in Herdr, such as a shell you typed `exit` in.
+    @ObservationIgnored public var onGone: (() -> Void)?
     @ObservationIgnored private let client: any HerdrTerminalClient
     @ObservationIgnored private var connection: (any HerdrTerminalConnection)?
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -176,7 +178,10 @@ public final class TerminalStore {
                     self.message = closedBecause ?? "Detached. The terminal continues in Herdr."
                     self.connection = nil
                     // A terminal that no longer exists won't come back.
-                    if closedBecause.map(Self.isGone) == true { self.reconnection = nil } else { self.reconnectLater() }
+                    if closedBecause.map(Self.isGone) == true {
+                        self.reconnection = nil
+                        self.onGone?()
+                    } else { self.reconnectLater() }
                 }
             } catch {
                 guard let self, attempt == self.generation, !Task.isCancelled else { return }
@@ -346,8 +351,9 @@ public final class TerminalStore {
         reason.localizedCaseInsensitiveContains("in progress; retry")
     }
 
+    /// Herdr ended the terminal because its program exited, or no longer has it.
     nonisolated static func isGone(_ reason: String) -> Bool {
-        reason.localizedCaseInsensitiveContains("not found")
+        reason.localizedCaseInsensitiveContains("not found") || reason.hasSuffix(" exited")
     }
 
     nonisolated static func isControlConflict(_ reason: String) -> Bool {

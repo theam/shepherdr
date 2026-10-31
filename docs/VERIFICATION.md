@@ -1,5 +1,20 @@
 # Verification
 
+## Splits (unreleased)
+
+Validated on 2026-10-29 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
+
+- `swift test`: **310 tests passed**. `PaneSplitsTests` cover reading `layouts` into each pane's share of its tab, from an area that doesn't start at 0; a layout Shepherdr can't read, which leaves the rest of the snapshot; which shells show inside a session (beside an agent, or after the first shell of a tab of shells); and `pane split`'s arguments, with `--machine` and without `--cwd`, refusing option-like values.
+- **What Herdr answers**, in a server of its own (a temporary `HOME`, `HERDR_*` unset): `pane split w1:p1 --direction right` and `--direction down` answer `pane_info` with the new pane; `api snapshot` carries `layouts` with each tab's `area`, the panes' `rect` and the split tree; `terminal session control` takes `--cols` and `--rows`.
+- **End to end**, a copy of the app with its own bundle identifier, launched with `open -g` against that server and driven through its menus with accessibility. The tab held one pane reporting itself as `claude`:
+  - **Split Right** made `w1:p4` to its right in the same folder, and the app attached both terminals in control mode. **Close Split** turned on, since the new pane had the keyboard.
+  - **Split Down** split `w1:p4`, the pane with the keyboard, not the session's own, and attached the new pane at its own size (55 × 18).
+  - **Close Split** closed that shell at once, at its prompt; its terminal was released, and the session's own pane took the keyboard again.
+  - With `sleep 300` running in a new split, **Close Split** left it open, waiting for the confirmation.
+- **Slow refreshes** (2026-10-30). On a Mac with a remote whose `api snapshot` took about 11 seconds, a split showed, and a closed one left, only after every machine answered. `ClusterStoreTests` now check that closing a pane reads only its machine, under a second while a refresh waits on a slow remote; that an answer asked for before the close doesn't bring the pane back; and that a closed pane leaves before its machine answers. End to end, with a wrapper that delays `machine list` by 8 seconds, **Split Right** took 11.6 s to show the new pane in the build before the fix and 1.4 s after it, counting the menu polling.
+- **A shell that exits** (2026-10-31). In a server of its own, `exit` typed through `terminal session control` into a split's shell made Herdr send `terminal.closed` with `terminal <id> exited` and close the pane; attaching again answered `terminal target <id> not found`. Shepherdr took the first as a dropped connection, reconnected, and showed the second as an error until the next refresh. `TerminalTests` now check that neither reason is retried and that both report the end once, while a dropped connection still reconnects; `ClusterStoreTests` that a pane that ended on its own leaves before its machine answers, without asking Herdr to close anything.
+- Not verified: the panes on screen (a background copy's window can't be captured), clicking a pane to work in it, **⌘W** (keys can't reach a background app's terminal), and splitting on another machine.
+
 ## Agents wait for a fully awake Mac (unreleased)
 
 Validated on 2026-10-20 on an Apple Silicon MacBook with macOS 26.6.2, Xcode 27 / Swift 6.4 and Herdr 0.9.3:
