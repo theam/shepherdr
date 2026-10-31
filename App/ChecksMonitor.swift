@@ -126,17 +126,20 @@ final class ChecksMonitor {
     }
 
     /// Looks again now, such as when a session's agent finished a turn and may have pushed.
-    func refresh(_ id: Agent.ID) {
-        if id == watched { restart(watching: id) } else { Task { _ = await poll(id) } }
+    /// With `includingDone`, merged and closed ones are asked about too, in case they were reopened.
+    func refresh(_ id: Agent.ID, includingDone: Bool = false) {
+        if id == watched { restart(watching: id, includingDone: includingDone) } else { Task { _ = await poll(id, includingDone: includingDone) } }
     }
 
-    private func restart(watching id: Agent.ID) {
+    private func restart(watching id: Agent.ID, includingDone: Bool = false) {
         guard gitHub.isAvailable else { return }
         loop?.cancel()
         loop = Task { [weak self] in
+            var includingDone = includingDone
             while !Task.isCancelled {
                 guard let self else { return }
-                let delay: Duration = switch await self.poll(id) {
+                defer { includingDone = false }
+                let delay: Duration = switch await self.poll(id, includingDone: includingDone) {
                 case .running: .seconds(15)
                 case .settled: .seconds(120)
                 case .unanswered: .seconds(300)
@@ -148,11 +151,11 @@ final class ChecksMonitor {
 
     private enum Poll { case running, settled, unanswered }
 
-    private func poll(_ id: Agent.ID) async -> Poll {
+    private func poll(_ id: Agent.ID, includingDone: Bool = false) async -> Poll {
         guard !isAsleep, let model, model.presence.isOnScreen else { return .settled }
-        await pollIssues(id, model: model)
+        await pollIssues(id, model: model, includingDone: includingDone)
         // Open pull requests only: merged and closed ones are done.
-        let pulls = model.pullRequests(of: id).filter { $0.github != nil && checks[$0.key]?.isOpen != false }.prefix(10)
+        let pulls = model.pullRequests(of: id).filter { $0.github != nil && (includingDone || checks[$0.key]?.isOpen != false) }.prefix(10)
         guard !pulls.isEmpty else { return .settled }
         // No answer, such as a spent GitHub budget: look again much later.
         guard let found = await gitHub.checks(of: Array(pulls)) else { return .unanswered }
@@ -168,8 +171,8 @@ final class ChecksMonitor {
     }
 
     /// Open issues only, like pull requests: closed ones are done.
-    private func pollIssues(_ id: Agent.ID, model: AppModel) async {
-        let open = model.issues(of: id).filter { $0.github != nil && issues[$0.key]?.isOpen != false }.prefix(10)
+    private func pollIssues(_ id: Agent.ID, model: AppModel, includingDone: Bool) async {
+        let open = model.issues(of: id).filter { $0.github != nil && (includingDone || issues[$0.key]?.isOpen != false) }.prefix(10)
         guard !open.isEmpty, let found = await gitHub.issueStates(of: Array(open)) else { return }
         issues.merge(found) { _, latest in latest }
         model.githubCache.remember(issues: found)

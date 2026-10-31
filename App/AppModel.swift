@@ -190,6 +190,13 @@ final class SessionWorkspace {
         save()
     }
 
+    /// Drops the pull requests, issues and artifacts the session's output no longer mentions, and marks
+    /// the rest to be checked again. Links an agent pinned stay.
+    func refresh(keeping present: Set<String>) {
+        resources = resources.filter { $0.kind == .link || present.contains($0.key) }.map { $0.unchecked() }
+        save()
+    }
+
     /// Opens a resource in the session's browser and counts the visit.
     func open(_ resource: SessionResource) {
         browser.open(resource.url)
@@ -359,6 +366,7 @@ final class AppModel {
     @ObservationIgnored let readiness = ReadinessMonitor()
     /// Whether Shepherdr keeps this Mac from sleeping; off every time it opens.
     let keepAwake = KeepAwake()
+    let subscriptions = SubscriptionMonitor()
 
     init(cluster: ClusterStore = ClusterStore(), order: SessionOrderStore = SessionOrderStore(),
          relations: SessionRelationStore = SessionRelationStore(), sessionStates: SessionStateStore = SessionStateStore()) {
@@ -916,6 +924,20 @@ final class AppModel {
             let settled = current.github != nil ? current.verified(isPullRequest: landed.kind == .pullRequest) : current
             return settled.found(title: title)
         }
+    }
+
+    /// Reads the session's output again: what it no longer mentions is dropped, and what it does is
+    /// checked again, along with the state of its pull requests and issues.
+    func refreshResources(for id: Agent.ID) async {
+        guard let context = context(for: id), context.canConnect,
+              let text = await cluster.recentOutput(paneID: context.paneID, onMachine: id.machineID, lines: 3_000) else { return }
+        let found = SessionResources.find(in: text)
+        let workspace = workspace(for: id)
+        workspace.refresh(keeping: Set(found.map(\.key)))
+        checkedThisLaunch.subtract(workspace.resources.map(\.key))
+        collectResources(found, for: id)
+        checkResources(for: id)
+        checksMonitor.refresh(id, includingDone: true)
     }
 
     /// Gathers the links a session printed before Shepherdr was watching it.

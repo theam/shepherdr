@@ -69,6 +69,7 @@ struct MainView: View {
         }
         .onAppear { model.compass.start() }
         .onAppear { model.updates.start() }
+        .onAppear { model.subscriptions.start() }
         .onChange(of: refreshSeconds) { configureRefresh() }
         .onChange(of: cluster.agents.map(\.id), initial: true) {
             model.order.synchronize(with: model.agents.map(\.id))
@@ -102,7 +103,7 @@ struct MainView: View {
             }
             Button("Cancel", role: .cancel) { model.renaming = nil }
         } message: {
-            Text("Renames its Herdr workspace. Other panes in the same workspace share the name.")
+            Text("Other sessions in the same workspace share this name.")
         }
         .sheet(item: $model.newSession) { draft in NewSessionSheet(model: model, draft: draft) }
         .sheet(item: $model.waitPicking) { picking in
@@ -156,9 +157,9 @@ struct MainView: View {
 
     private var ended: some View {
         VStack(spacing: 12) {
-            Text("[ SESSION ENDED ]").font(Theme.mono(14, .bold)).foregroundStyle(Theme.dim)
-            Text("Herdr no longer reports this terminal.").font(Theme.mono(11)).foregroundStyle(Theme.faint)
-            Button("BACK TO OVERVIEW") { model.selection = .overview }.buttonStyle(ConsoleButtonStyle())
+            Text("This session has ended").font(Theme.mono(14, .bold)).foregroundStyle(Theme.dim)
+            Text("It's no longer running.").font(Theme.mono(11)).foregroundStyle(Theme.faint)
+            Button("Back to Overview") { model.selection = .overview }.buttonStyle(ConsoleButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
@@ -172,8 +173,8 @@ struct MainView: View {
     private func closeMessage(_ id: Agent.ID) -> String {
         guard let context = model.context(for: id) else { return "" }
         let what = context.agent.map { "ends \($0.agent.program.name) and closes" } ?? "closes"
-        return "This \(what) pane \(context.paneID) in Herdr\(context.machine.machine.isLocal ? "" : " on \(context.machine.machine.name)"). "
-            + "If it is the workspace's last pane, the workspace closes too. This cannot be undone."
+        return "This \(what) the session\(context.machine.machine.isLocal ? "" : " on \(context.machine.machine.name)"). "
+            + "This can't be undone."
     }
 
     private func closeSplitMessage(_ id: Agent.ID) -> String {

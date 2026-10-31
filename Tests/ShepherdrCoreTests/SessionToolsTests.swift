@@ -103,6 +103,14 @@ struct ResourceRelevanceTests {
         #expect(merged[0].title == "Seat-based distribution" && merged[0].isChecked)
     }
 
+    @Test func uncheckedResourcesAreCheckedAgainKeepingTheirTitle() {
+        let done = resource("https://github.com/a/b/pull/3").found(title: "Old title")
+        #expect(done.isChecked)
+        let again = done.unchecked()
+        #expect(!again.isChecked && !again.isMissing && again.title == "Old title")
+        #expect(!resource("https://github.com/a/b/pull/4").missing().unchecked().isMissing)
+    }
+
     @Test func pageTitlesLoseTheSitesDecoration() {
         let pull = resource("https://github.com/theam/shepherdr/pull/12")
         #expect(ResourceTitles.clean("Fix login redirect by javier · Pull Request #12 · theam/shepherdr", for: pull) == "Fix login redirect by javier")
