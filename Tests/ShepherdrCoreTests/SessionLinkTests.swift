@@ -15,7 +15,7 @@ private func agent(_ terminal: String, on machine: Machine = .local, name: Strin
 
 private func shell(_ terminal: String, on machine: Machine = .local, workspace: String, workspaceID: String,
                    pane: String) -> SessionDirectory.Entry {
-    SessionDirectory.Entry(pane: TerminalPane(terminalID: terminal, paneID: pane, workspaceID: workspaceID,
+    SessionDirectory.Entry(pane: TerminalPane(terminalID: terminal, paneID: pane, workspaceID: workspaceID, tabID: "\(workspaceID):t1",
                                               workspaceName: workspace, title: "1 · \(pane)", directory: nil),
                            machineID: machine.id)
 }

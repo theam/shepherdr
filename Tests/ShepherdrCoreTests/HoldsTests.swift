@@ -7,7 +7,7 @@ struct HoldsTests {
         var state = MachineState(machine: Machine(profileID: id, name: id ?? "Local", target: id, session: "default", isEnabled: true))
         state.connection = online ? .online : .unreachable
         state.snapshot = MachineSnapshot(version: "0.9.3", protocolVersion: 1, workspaces: [], agents: [], panes: terminals.map {
-            TerminalPane(terminalID: $0, paneID: "w1:p1", workspaceID: "w1", workspaceName: "w", title: "", directory: nil)
+            TerminalPane(terminalID: $0, paneID: "w1:p1", workspaceID: "w1", tabID: "w1:t1", workspaceName: "w", title: "", directory: nil)
         })
         return state
     }

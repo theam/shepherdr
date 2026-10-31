@@ -38,10 +38,12 @@ actor MockHerdrClient: HerdrClient {
     }
     func catalogReadCount() -> Int { catalogReads }
     func snapshotCalls() -> [String] { calls }
+    /// Answers with the response set when asked, after its delay, as a machine would.
     func snapshot(for machine: Machine) async throws -> MachineSnapshot {
         calls.append(machine.id)
+        let response = responses[machine.id] ?? .failure(HerdrFailure(.notRunning, "Not running"))
         if let delay = delays[machine.id], delay > .zero { try await Task.sleep(for: delay) }
-        return try (responses[machine.id] ?? .failure(HerdrFailure(.notRunning, "Not running"))).get()
+        return try response.get()
     }
     func callCount() -> Int { calls.count }
 
