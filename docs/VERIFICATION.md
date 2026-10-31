@@ -1,5 +1,13 @@
 # Verification
 
+## Slack links leave the browser (unreleased)
+
+Validated on 2026-10-31 on macOS 26.6.2 with Xcode 27 / Swift 6.4:
+
+- `swift test`: **313 tests passed**. `ExternalLinksTests` cover Slack's workspace, app, file and bare links, over http and in capitals; its OAuth and OpenID pages, which stay so **Sign in with Slack** works; and look-alikes that stay, such as `notslack.com`, `slack.com.example.org`, `slack.com` in a path, and a file URL.
+- **Where macOS sends them:** `NSWorkspace.urlForApplication(toOpen:)` answered the default browser, Safari, for `https://acme.slack.com/archives/…` and `https://app.slack.com/client/…`; Slack.app claims only `slack://`. So the default browser opens them, and Slack's page offers its app.
+- Not verified: clicking a Slack link from each place in the running app (the terminal, a page, a new window, **Resources**, Compass and the address bar). Opening one would have brought the Mac's own browser and Slack forward.
+
 ## Splits (unreleased)
 
 Validated on 2026-10-29 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.3:

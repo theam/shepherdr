@@ -16,7 +16,7 @@ A bilingual (English/Spanish) quick guide with the same content comes with the a
 - **Split the terminal:** **⌘D** splits the pane you work in side by side and **⇧⌘D** stacked, each with a shell in its folder. Herdr's own splits show the same way.
 - **Dictation:** record a prompt (**⇧⌘M**); it is transcribed on this Mac and lands in the prompt editor for you to review.
 - **Unlocked by default:** sessions open with input enabled. Click the padlock to lock one read-only. If another client controls the terminal, Shepherdr stays locked and offers an explicit **Take Over**.
-- **A browser per session:** click a link in the terminal and it opens in the session's own browser, next to the terminal; its tabs stay put while you work elsewhere. **⌘-click**, in the terminal or in a page, opens your default browser instead.
+- **A browser per session:** click a link in the terminal and it opens in the session's own browser, next to the terminal; its tabs stay put while you work elsewhere. **⌘-click**, in the terminal or in a page, opens your default browser instead, as Slack links always do.
 - **Resources:** the pull requests, issues and Claude artifacts a session links to gather in a panel on the right, one click from its browser.
 - **Local files:** click a path an agent prints. Markdown opens rendered in the session's browser, HTML opens as a page, and any other file in its default app.
 - **Sessions named in the terminal:** click another session's name or pane ID, as `shepherdr` prints them when an agent starts one, to open that session.
@@ -223,6 +223,8 @@ Click a pane to work in it. It's outlined, and the prompt editor, the padlock, t
 Each session has its own browser column, to the right of the terminal. Clicking a link opens it there in a new tab, or switches to the tab already showing it; **◫ BROWSER** in the bottom bar or **⌘B** shows or hides the column, and **+** opens an empty tab. The tabs stay loaded, scrolled and signed in while you switch sessions, so a pull request you are reviewing is still where you left it. Pages stay loaded out of sight, up to 24 besides the ones on screen; past that, the pages of the sessions you go back to least let go of their memory and of whatever they keep running, and more of them do when macOS runs short of memory (6 under memory pressure, none when it's critical). The tab keeps its address and title and loads the page again when you show it, without its scroll position, back and forward history, or anything typed in a form. Compass's page, a page still loading, and pages another page opened as a window stay loaded. Pages that open new windows open new tabs. **⧉** opens the current page in your default browser.
 
 **⌘-click** a link in a page to open it in your default browser instead.
+
+Slack links, wherever you open them (the terminal, a page, a resource, the address bar or Compass), leave Shepherdr as a ⌘-click does: macOS opens them in your default browser, where Slack offers to open them in its app. A page's **Sign in with Slack** stays in the column.
 
 **Help → Shepherdr Guide** (**⌘?**), or **?** at the foot of the sidebar, opens the quick guide in the browser of the session you are looking at, and **Help → Herdr Documentation** opens Herdr's. On the overview they open in a browser of its own, which **⌘B** also shows or hides; its tabs are not kept after a restart.
 
