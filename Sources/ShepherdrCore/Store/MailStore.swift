@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Letters from agents that wait for something, and which letters Shepherdr already read, so a
-/// letter collected twice, such as after a failed trip, is only acted on once. Saved across
+/// letter is acted on once though it waits in its outbox until some Shepherdr claims it. Saved across
 /// launches: what items say and where their files are kept, never the files themselves.
 @MainActor @Observable
 public final class MailStore {
@@ -33,6 +33,17 @@ public final class MailStore {
         guard !letterIDs.isEmpty else { return }
         for id in letterIDs { seen["\(machineID)/\(id)"] = date }
         defaults.set(seen, forKey: Self.seenKey)
+    }
+
+    /// Letters read from a machine recently enough to still wait in its outbox, the newest first:
+    /// letters stay there until a Shepherdr claims them, or for a week. A trip skips them.
+    public func recentlyRead(from machineID: String, limit: Int = 500, now: Date = Date()) -> [String] {
+        let prefix = "\(machineID)/"
+        return seen.filter { $0.key.hasPrefix(prefix) && now.timeIntervalSince($0.value) < 8 * 86_400 }
+            .map { String($0.key.dropFirst(prefix.count)) }
+            .sorted(by: >)
+            .prefix(limit)
+            .map { $0 }
     }
 
     // MARK: Doorbells

@@ -316,7 +316,7 @@ When Shepherdr brings newer tools, the machine's sessions offer **UPDATE**. **Se
 | `shepherdr open URL` | Opens a page in the caller's browser in Shepherdr |
 | `shepherdr notify MESSAGE` | Shows you a notification |
 | `shepherdr close [--force] [NAME…]` | Asks you to close those sessions, or the caller's own |
-| `shepherdr status` | This machine, the caller's pane and letters not collected yet |
+| `shepherdr status` | This machine, the caller's pane and letters no Shepherdr has taken yet |
 
 `spawn` creates a Herdr workspace in the folder (or splits the caller's pane with `--split`), starts the agent, by default the caller's own kind, and sends it the prompt. Shepherdr puts the new session right after the caller, in its group, nested under it, and keeps the caller on hold until the new one finishes; `--no-wait`, which the skill keeps for when you ask for a session that isn't linked, only places it. If the agent stops at a startup question, such as trusting the folder, Shepherdr sends the prompt once it is ready. Names are Herdr agent names, and the workspace gets the same one. A session asked for on this Mac starts once the Mac is awake and online, as [Compass's runs](#runs) do.
 
@@ -326,13 +326,13 @@ Ask an agent to close a session, its own included, and it runs `shepherdr close`
 
 ### Machine lists
 
-The skill doesn't name your machines: they change, it doesn't. Instead, Shepherdr writes `~/.shepherdr/machines` on each machine that has the tools, with that machine's own view: its name, and how it reaches each of the others. From this Mac, Herdr reaches every saved machine directly. From another machine, only Shepherdr reaches the rest: `spawn` there files a request that you approve. Shepherdr rewrites a machine's list only when it changes, such as when you add, rename or disable a machine.
+The skill doesn't name your machines: they change, it doesn't. Instead, Shepherdr writes a list in `~/.shepherdr/lists` on each machine that has the tools, with that machine's own view: its name, and how it reaches each of the others. From this Mac, Herdr reaches every saved machine directly. From another machine, only Shepherdr reaches the rest: `spawn` there files a request that you approve. Shepherdr rewrites a machine's list only when it changes, such as when you add, rename or disable a machine.
 
 The lists only hold names and routes: never hosts, users, ports or keys. Herdr profile IDs only go into this Mac's own list. This Mac goes by its computer name unless you set another in **Settings → Agents → This Mac**. Turn off **Share the machine list** for a machine to let it know only its own name.
 
 ### Letters
 
-Machines never connect to this Mac. The command leaves each request as a letter in `~/.shepherdr/outbox` on its machine, and rings a doorbell: a token on the caller's Herdr pane, which Shepherdr sees in its next refresh. Shepherdr then collects the machine's letters over SSH, keeps them in `~/.shepherdr/inbox` on this Mac, and moves them to `outbox/.collected` there. A manual refresh (**⌘R**) also looks in every outbox, for letters whose doorbell was lost when Herdr restarted. While Shepherdr is closed, letters wait.
+Machines never connect to this Mac. The command leaves each request as a letter in `~/.shepherdr/outbox` on its machine, and rings a doorbell: a token on the caller's Herdr pane, which Shepherdr sees in its next refresh. Shepherdr then collects the machine's letters over SSH and keeps them in `~/.shepherdr/inbox` on this Mac. A letter leaves the outbox once a Shepherdr carries it out, or after a week. A manual refresh (**⌘R**) also looks in every outbox, for letters whose doorbell was lost when Herdr restarted. While Shepherdr is closed, letters wait.
 
 Letters are data: Shepherdr checks every field, accepts only http and https links and plain files with safe names, and never runs anything in them. Letters from this Mac apply on their own, except requests to close a session, which always wait for you. From another machine, four things wait for you in the session's mail panel, on the overview and as a notification, with an amber envelope in the queue:
 
@@ -342,6 +342,12 @@ Letters are data: Shepherdr checks every field, accepts only http and https link
 - **Requests to close a session**, from any machine, this Mac included: **CLOSE** closes it.
 
 **Settings → Agents → Trust its letters** lets a machine's letters through without asking, except requests to close a session. A cyan envelope means mail waits for its session to be free. Shepherdr keeps the letters' files for a month.
+
+### More than one Shepherdr
+
+You can run Shepherdr on more than one Mac, such as on a Mac that another one keeps as a remote machine. Both read the same Herdr, so each letter is carried out once, by whichever gets to it first. What needs no approval goes right away. What waits for you shows on both Macs: act on it in either, and the other drops it. Each Shepherdr writes its own machine list, and the agents there can reach the machines of both. A letter that names a machine one of them doesn't keep, such as a session requested on the other Mac, is left for the one that does.
+
+When you let something through, Shepherdr first takes the letter on the machine it came from. If that machine doesn't answer, the item says it waits for it, and goes ahead once it does. A session started for a request, and a pane that got a handoff, keep a note of it in Herdr, so nothing starts or arrives twice, even after a restart. Letters no Shepherdr takes are filed after a week. A Shepherdr older than 0.9.2 still takes every letter it reads, so update them all.
 
 ## Compass
 

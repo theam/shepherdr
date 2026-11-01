@@ -6,7 +6,8 @@
 # It only talks to this machine's Herdr, and through it to the machines Herdr has saved.
 # Whatever is meant for Shepherdr goes into a letter in ~/.shepherdr/outbox, announced by a
 # token on the caller's pane. Shepherdr collects letters over its own SSH connection: nothing
-# here ever connects to the Mac Shepherdr runs on.
+# here ever connects to the Mac Shepherdr runs on. More than one Shepherdr may keep this
+# machine: each writes its own list of machines, and the one that carries a letter out claims it.
 #
 # POSIX sh on purpose: it must run on any machine with Herdr, without installing anything else.
 
@@ -17,7 +18,9 @@ PROTOCOL=1
 tools=$(CDPATH='' cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd -P) || tools=.
 root=${SHEPHERDR_HOME:-$HOME/.shepherdr}
 herdr=${HERDR_BIN_PATH:-herdr}
-machines_file=$root/machines
+# Each Shepherdr's list of machines, and the single list older Shepherdrs write.
+lists_dir=$root/lists
+legacy_list=$root/machines
 tab=$(printf '\t')
 nl='
 '
@@ -141,53 +144,71 @@ learn_caller() {
 
 # MARK: Machines
 
-# Sets $route, $profile and $machine_name for a machine in Shepherdr's list; this machine when
-# the name is empty. Routes: here (this machine), direct (Herdr reaches it), shepherdr (only
-# Shepherdr does, after the user approves).
+# The lists to read: those of every Shepherdr that checked this machine within a week, newest
+# first, then the one list older Shepherdrs write. A list nobody checks is a Shepherdr's that
+# no longer runs.
+list_files() {
+    if [ -d "$lists_dir" ]; then
+        find "$lists_dir" -type f ! -name '.*' -mtime -8 2>/dev/null | while IFS= read -r lf_file; do
+            printf '%s\t%s\n' "$(head -n 1 "$lf_file" | awk '{ print $NF }')" "$lf_file"
+        done | sort -r | cut -f 2-
+    fi
+    [ -f "$legacy_list" ] && printf '%s\n' "$legacy_list"
+}
+
+# Every machine in the lists, once: its name, route and profile, tab-separated, with the best
+# route any list gives it. Routes: here (this machine), direct (its Herdr reaches it) and
+# shepherdr (only a Shepherdr does, after the user approves).
+machine_entries() {
+    list_files | while IFS= read -r me_file; do
+        grep -v '^#' "$me_file" 2>/dev/null
+    done | awk -F "$tab" '
+        NF >= 2 && $1 != "" {
+            key = tolower($1)
+            rank = 0
+            if ($2 == "here") rank = 3
+            else if ($2 == "direct" && $3 != "" && $3 != "-") rank = 2
+            else if ($2 == "shepherdr") rank = 1
+            if (rank == 0) next
+            if (!(key in best)) order[++count] = key
+            if (rank > best[key]) { best[key] = rank; line[key] = $1 FS $2 FS $3 }
+        }
+        END { for (i = 1; i <= count; i++) print line[order[i]] }'
+}
+
+# Sets $route, $profile and $machine_name for a machine in Shepherdr's lists; this machine when
+# the name is empty.
 resolve_machine() {
     route=here
     profile=
     machine_name=$(this_machine)
     [ -n "$1" ] || return 0
-    [ -f "$machines_file" ] || fail "Shepherdr hasn't written its machine list on this machine yet, so only this machine is known. Leave out --machine, or ask the user to open Shepherdr."
+    rm_entries=$(machine_entries)
+    [ -n "$rm_entries" ] || fail "Shepherdr hasn't written its machine list on this machine yet, so only this machine is known. Leave out --machine, or ask the user to open Shepherdr."
     rm_wanted=$(lower "$1")
     while IFS="$tab" read -r m_name m_route m_profile; do
-        case $m_name in '#'* | '') continue ;; esac
         [ "$(lower "$m_name")" = "$rm_wanted" ] || continue
         machine_name=$m_name
         route=$m_route
-        profile=
-        case $route in
-        here) ;;
-        direct)
+        if [ "$route" = direct ]; then
             is_profile_id "$m_profile" || fail "Shepherdr's machine list has no Herdr profile for $m_name."
             profile=$m_profile
-            ;;
-        shepherdr) ;;
-        *) fail "Shepherdr's machine list has an unknown route for $m_name: $route" ;;
-        esac
+        fi
         return 0
-    done <"$machines_file"
+    done <<LIST
+$rm_entries
+LIST
     fail "No machine named \"$1\". Machines Shepherdr knows: $(machine_names). Run \"shepherdr machines\" for details."
 }
 
 this_machine() {
-    if [ -f "$machines_file" ]; then
-        while IFS="$tab" read -r m_name m_route m_profile; do
-            case $m_name in '#'* | '') continue ;; esac
-            [ "$m_route" = here ] && printf '%s' "$m_name" && return 0
-        done <"$machines_file"
-    fi
-    printf 'this machine'
+    # Read to the end: stopping early would break the pipe for whatever still writes to it.
+    tm_name=$(machine_entries | awk -F "$tab" '$2 == "here" && !found { print $1; found = 1 }')
+    printf '%s' "${tm_name:-this machine}"
 }
 
 machine_names() {
-    mn_names=
-    while IFS="$tab" read -r m_name m_route m_profile; do
-        case $m_name in '#'* | '') continue ;; esac
-        mn_names=${mn_names:+$mn_names, }$m_name
-    done <"$machines_file"
-    printf '%s' "$mn_names"
+    machine_entries | cut -f 1 | awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $0 }'
 }
 
 # MARK: Letters
@@ -458,17 +479,16 @@ request_spawn() {
 
 cmd_machines() {
     [ $# -eq 0 ] || usage_error "machines takes no arguments."
-    if [ ! -f "$machines_file" ]; then
+    cm_entries=$(machine_entries)
+    if [ -z "$cm_entries" ]; then
         say "Shepherdr hasn't written its machine list on this machine yet."
         say "Only this machine is known: use spawn without --machine."
         return 0
     fi
-    header=$(head -n 1 "$machines_file")
-    updated=$(printf '%s' "$header" | awk '{ print $NF }')
+    updated=$(list_files | awk 'NR == 1' | while IFS= read -r cm_file; do head -n 1 "$cm_file" | awk '{ print $NF }'; done)
     say "You are on $(this_machine). Shepherdr's list, written $updated:"
     printf '%-24s %-10s %s\n' NAME ROUTE "WHAT SPAWN DOES"
     while IFS="$tab" read -r m_name m_route m_profile; do
-        case $m_name in '#'* | '') continue ;; esac
         case $m_route in
         here) what="starts it on this machine" ;;
         direct) what="starts it there right away" ;;
@@ -476,7 +496,9 @@ cmd_machines() {
         *) what="unknown route" ;;
         esac
         printf '%-24s %-10s %s\n' "$m_name" "$m_route" "$what"
-    done <"$machines_file"
+    done <<LIST
+$cm_entries
+LIST
 }
 
 cmd_folders() {

@@ -30,12 +30,12 @@ public enum AgentTools {
 
         /// The installed tools' version; nil when they aren't installed.
         public var version: Int?
-        /// The revision of the machine list there, if any.
+        /// The revision of this Shepherdr's machine list there, if any.
         public var listRevision: String?
         /// `uname -sm`, such as `Linux x86_64`.
         public var system: String?
         public var agents: [AgentHome] = []
-        /// Letters in the outbox that Shepherdr hasn't collected.
+        /// Letters in the outbox that no Shepherdr has claimed yet.
         public var waitingLetters = 0
 
         /// An agent is installed without the skill, such as Codex installed after the tools.
@@ -75,13 +75,24 @@ public enum AgentTools {
 
     // MARK: Checking a machine
 
-    /// One quick trip: the installed version, the machine list's revision, the system, which
-    /// agents are installed with or without the skill, and how many letters wait.
+    /// One quick trip: the installed version, the revision of the machine list of the Shepherdr
+    /// given first, the system, which agents are installed with or without the skill, and how
+    /// many letters wait. It touches that list too: lists nobody checked in a week are left out,
+    /// for a Shepherdr that no longer runs.
     static let checkScript = """
     root="$HOME/.shepherdr"
     version=$(head -n 1 "$root/VERSION" 2>/dev/null)
     echo "shepherdr-tools ${version:--}"
-    revision=$(head -n 1 "$root/machines" 2>/dev/null | awk '{ print $6 }')
+    revision=
+    case ${1:-} in
+    '' | *[!0123456789abcdef]*) ;;
+    *)
+      if [ -f "$root/lists/$1" ]; then
+        revision=$(head -n 1 "$root/lists/$1" | awk '{ print $6 }')
+        touch "$root/lists/$1"
+      fi
+      ;;
+    esac
     echo "shepherdr-list ${revision:--}"
     echo "shepherdr-system $(uname -sm 2>/dev/null)"
     home() {
@@ -96,8 +107,9 @@ public enum AgentTools {
     echo "shepherdr-outbox $waiting"
     """
 
-    public static func check(_ machine: Machine) async throws -> Check {
-        guard let command = machine.shell(checkScript) else {
+    /// Checks a machine for the Shepherdr with that instance ID.
+    public static func check(_ machine: Machine, instance: String) async throws -> Check {
+        guard let command = machine.shell(checkScript, arguments: isInstance(instance) ? [instance] : []) else {
             throw HerdrFailure(.incompatible, "Shepherdr can't reach \(machine.name) over SSH.")
         }
         let output = try await Mailbox.run(command, on: machine, action: "check the agent tools on")
@@ -139,7 +151,7 @@ public enum AgentTools {
     /// Files go into a folder beside the tools first and then into place, the version file last:
     /// a half-finished install never looks complete. The skill is copied into each agent's own
     /// skills folder, for the agents installed there. The machine list goes in on the same trip.
-    static func installScript(_ kit: Kit, list: String?) throws -> String {
+    static func installScript(_ kit: Kit, list: String?, instance: String) throws -> String {
         let fence = "SHEPHERDR_END_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let contents = Array(kit.files.values) + [list ?? ""]
         guard !contents.contains(where: { $0.contains(fence) }) else {
@@ -184,32 +196,42 @@ public enum AgentTools {
         skill codex "${CODEX_HOME:-$HOME/.codex}"
 
         """
-        if let list { script += writeListLines(list, fence: fence) }
+        if let list { script += try writeListLines(list, instance: instance, fence: fence) }
         script += "echo \"shepherdr-installed \(kit.version)\"\n"
         return script
     }
+
+    /// Instance IDs name files on every machine: twelve hex digits, nothing else.
+    static func isInstance(_ id: String) -> Bool { id.range(of: "^[0-9a-f]{12}$", options: .regularExpression) != nil }
 
     private static func file(_ contents: String, at path: String, fence: String) -> String {
         let body = contents.hasSuffix("\n") || contents.isEmpty ? contents : contents + "\n"
         return "cat > \"\(path)\" <<'\(fence)'\n\(body)\(fence)\n"
     }
 
-    private static func writeListLines(_ list: String, fence: String) -> String {
-        "mkdir -p \"$root\"\n" + file(list, at: "$root/.machines-$$", fence: fence) + "mv \"$root/.machines-$$\" \"$root/machines\"\n"
+    /// Each Shepherdr keeps its own list, `lists/<instance>`, so two that keep the same machine
+    /// don't overwrite each other's; the command line reads them all. `machines`, the one list
+    /// version 5 and earlier read, gets a copy too.
+    private static func writeListLines(_ list: String, instance: String, fence: String) throws -> String {
+        guard isInstance(instance) else { throw HerdrFailure(.incompatible, "This Shepherdr's instance ID is invalid.") }
+        return "mkdir -p \"$root/lists\"\n" + file(list, at: "$root/lists/.list-$$", fence: fence)
+            + "mv \"$root/lists/.list-$$\" \"$root/lists/\(instance)\"\n"
+            + "cp \"$root/lists/\(instance)\" \"$root/.machines-$$\"\n" + "mv \"$root/.machines-$$\" \"$root/machines\"\n"
     }
 
-    public static func install(_ kit: Kit, list: String?, on machine: Machine) async throws {
-        let output = try await runScript(try installScript(kit, list: list), on: machine, action: "install the agent tools on")
+    public static func install(_ kit: Kit, list: String?, instance: String, on machine: Machine) async throws {
+        let output = try await runScript(try installScript(kit, list: list, instance: instance), on: machine, action: "install the agent tools on")
         guard String(decoding: output.stdout, as: UTF8.self).contains("shepherdr-installed \(kit.version)") else {
             let detail = String(decoding: output.stderr.prefix(2_048), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             throw HerdrFailure(.unreachable, "Could not install the agent tools on \(machine.name).", detail: detail.isEmpty ? nil : detail)
         }
     }
 
-    /// Writes the machine list on a machine that has the tools.
-    public static func writeList(_ list: String, on machine: Machine) async throws {
+    /// Writes this Shepherdr's machine list on a machine that has the tools.
+    public static func writeList(_ list: String, instance: String, on machine: Machine) async throws {
         let fence = "SHEPHERDR_END_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
-        let script = "set -e\numask 077\nroot=\"$HOME/.shepherdr\"\n" + writeListLines(list, fence: fence) + "echo shepherdr-list-written\n"
+        let script = "set -e\numask 077\nroot=\"$HOME/.shepherdr\"\n" + (try writeListLines(list, instance: instance, fence: fence))
+            + "echo shepherdr-list-written\n"
         let output = try await runScript(script, on: machine, action: "write the machine list on")
         guard String(decoding: output.stdout, as: UTF8.self).contains("shepherdr-list-written") else {
             throw HerdrFailure(.unreachable, "Could not write the machine list on \(machine.name).")
@@ -219,7 +241,7 @@ public enum AgentTools {
     /// Removes the tools and their skills. Letters stay in `~/.shepherdr` until you delete it.
     static let uninstallScript = """
     root="$HOME/.shepherdr"
-    rm -rf "$root/bin" "$root/skills" "$root/VERSION" "$root/machines" \\
+    rm -rf "$root/bin" "$root/skills" "$root/VERSION" "$root/machines" "$root/lists" \\
       "$HOME/.claude/skills/shepherdr" "${CODEX_HOME:-$HOME/.codex}/skills/shepherdr"
     echo shepherdr-removed
     """

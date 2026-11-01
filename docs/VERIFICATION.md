@@ -1,5 +1,24 @@
 # Verification
 
+## Letters carried out once by any Shepherdr (unreleased)
+
+Validated on 2026-11-01 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
+
+- **The cause,** read over SSH without changing anything. An agent on a remote Mac asked for a session on this one. That Mac ran its own Shepherdr 0.9.0, which took the letter as one of its own, as soon as the doorbell rang, and couldn't start a session on a machine it didn't know. This Mac never saw the letter. The two Shepherdrs also took turns writing the remote Mac's machine list, so the agent saw this Mac only some of the time.
+- `swift test`: **323 tests passed**.
+  - `AgentToolsTests` cover claims: the claimant's name in `claimed-by`, and who has a letter when the claim loses. Two claim scripts started at once over 12 letters, in opposite orders, gave each letter to exactly one of them.
+  - A letter already read is only named until it's claimed, and a letter nobody claims within a week is filed as `expired`.
+  - `MailboxStreamTests` cover `K` lines and claim answers after a banner or cut short.
+  - `MailPlannerTests` cover letters left for another Shepherdr: a session request for a machine it doesn't keep, a `name@machine` on one, and a `spawned` child behind another machine's profile. They also cover what waits unclaimed and what is claimed at once.
+  - `MailStoreTests` cover the letters a trip skips, mail kept before claims, and delivery IDs.
+- `test.sh`: **21 passed** with sh, dash and bash under `en_US.UTF-8`, including several lists combined with the best route for each name, a list nobody checked in years left out, and the single older list read too. `herdr-live.sh` passed.
+- **End to end**, two copies of the app with their own bundle IDs and settings, both local to one Herdr server with a temporary `HOME` and kit 6 installed:
+  - Each wrote its own list in `lists/`, named after its instance ID, and `shepherdr machines` combined them.
+  - Named alike and trusting their own letters, both received three session requests. Each request started exactly one workspace, marked with `shepherdr-letter`, and every letter was claimed once. Both read one of them, and it still started once.
+  - Named Alpha and Beta, without trust, a request for a machine neither keeps stayed in the outbox and showed in neither. One for Alpha waited unclaimed, in Alpha only. Once another name claimed it, Alpha took its card back on its next trip.
+  - `shepherdr machines` printed "write error: Broken pipe" under bash: a `head` closed its pipe early. Fixed, and checked five times.
+- Not verified: pressing a mail button, since a background copy's window isn't in the accessibility tree. So the claim when you let mail through, the notice when another Shepherdr took it first, and the wait while its machine doesn't answer weren't tried by hand. Nor two Shepherdrs on different Macs over SSH.
+
 ## Slack links leave the browser (0.9.1)
 
 Validated on 2026-10-31 on macOS 26.6.2 with Xcode 27 / Swift 6.4:

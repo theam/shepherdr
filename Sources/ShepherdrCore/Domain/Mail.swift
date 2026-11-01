@@ -2,7 +2,8 @@ import Foundation
 
 /// A collected letter that waits for something: the user's approval, a recipient, or its
 /// recipient to be free. Shepherdr keeps these across launches; the letters' files stay in the
-/// inbox on this Mac.
+/// inbox on this Mac. Until Shepherdr claims its letter, another Shepherdr that keeps the same
+/// machine may carry it out instead.
 public struct MailItem: Identifiable, Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
         /// Work handed back, delivered to its recipient as a prompt.
@@ -27,6 +28,8 @@ public struct MailItem: Identifiable, Codable, Equatable, Sendable {
         case queued
         /// Couldn't be delivered; `problem` says why.
         case failed
+        /// You let it through: it waits for its machine to confirm that no other Shepherdr took it.
+        case confirming
     }
 
     /// A requested session, as the letter asked for it.
@@ -60,11 +63,14 @@ public struct MailItem: Identifiable, Codable, Equatable, Sendable {
     public var url: URL?
     public var request: Request?
     public var problem: String?
+    /// Whether this Shepherdr claimed the letter, so no other carries it out: false while it waits
+    /// for you everywhere. Nil for mail kept before claims, whose letters were filed as they arrived.
+    public var isClaimed: Bool?
 
     public init(id: String, letterID: String, kind: Kind, origin: String, originName: String, sender: Agent.ID?,
                 senderName: String?, recipient: Agent.ID?, status: Status, received: Date, folder: String,
                 headline: String?, hasMessage: Bool, files: [String], addressedTo: String?,
-                url: URL? = nil, request: Request? = nil, problem: String? = nil) {
+                url: URL? = nil, request: Request? = nil, problem: String? = nil, isClaimed: Bool? = nil) {
         self.id = id
         self.letterID = letterID
         self.kind = kind
@@ -83,10 +89,27 @@ public struct MailItem: Identifiable, Codable, Equatable, Sendable {
         self.url = url
         self.request = request
         self.problem = problem
+        self.isClaimed = isClaimed
     }
 
     /// Whether it waits for the user rather than for a session.
     public var needsUser: Bool { status != .queued }
+
+    /// Its letter must be claimed before it is carried out.
+    public var needsClaim: Bool { isClaimed == false }
+
+    /// The same on every Shepherdr: the letter and which of its deliveries, without the machine,
+    /// whose ID each Shepherdr names its own way.
+    public var deliveryID: String { id.firstIndex(of: "/").map { String(id[id.index(after: $0)...]) } ?? id }
+}
+
+/// The tokens Shepherdr leaves on panes so that a letter is carried out only once, even by
+/// another Shepherdr or after a restart.
+public enum LetterTokens {
+    /// On a session started for a request: the request's letter ID.
+    public static let started = "shepherdr-letter"
+    /// On a pane that got a handoff or a first prompt: the last delivery's `deliveryID`.
+    public static let delivered = "shepherdr-delivered"
 }
 
 /// What Shepherdr does with a letter.
@@ -102,6 +125,30 @@ public enum MailAction: Equatable, Sendable {
     case notify(Agent.ID?, String)
     /// Something in the letter couldn't be done, to show on the sender if there is one.
     case problem(Agent.ID?, String)
+    /// It names a machine this Shepherdr doesn't keep: it's for another one, so it stays in the
+    /// outbox for that one, untouched.
+    case elsewhere
+}
+
+/// How Shepherdr takes a letter, from what it plans for it.
+public enum MailHandling: Equatable, Sendable {
+    /// For another Shepherdr: left in the outbox.
+    case elsewhere
+    /// Only asks the user: every Shepherdr that keeps its machine offers it, and the first one
+    /// where the user acts on it claims it.
+    case waitsForUser
+    /// Claimed, then carried out at once.
+    case applies
+
+    public init(_ actions: [MailAction]) {
+        if actions.contains(.elsewhere) {
+            self = .elsewhere
+        } else if !actions.isEmpty, actions.allSatisfy({ if case .keep(let item) = $0 { item.needsUser } else { false } }) {
+            self = .waitsForUser
+        } else {
+            self = .applies
+        }
+    }
 }
 
 /// What Shepherdr knows when a letter arrives.
@@ -127,13 +174,28 @@ public struct MailContext: Sendable {
         self.waits = waits
         self.protected = protected
     }
+
+    /// Whether a machine by that name is one this Shepherdr keeps, this Mac included.
+    public func knowsMachine(named name: String) -> Bool {
+        let wanted = name.trimmingCharacters(in: .whitespaces).lowercased()
+        return MachineList.uniqueNames(MachineList.withLocal(machines), macName: macName).values.contains { $0.lowercased() == wanted }
+            || machines.contains { $0.name.lowercased() == wanted }
+    }
+
+    /// Whether a session name ends in an `@machine` this Shepherdr doesn't keep.
+    func namesUnknownMachine(_ query: String) -> Bool {
+        guard let at = query.lastIndex(of: "@") else { return false }
+        let machine = query[query.index(after: at)...].trimmingCharacters(in: .whitespaces)
+        return !machine.isEmpty && !knowsMachine(named: machine)
+    }
 }
 
 public enum MailPlanner {
     /// Turns a letter into actions. Letters from this Mac apply on their own. From another
     /// machine, text that would reach a session on a different machine, a request for a session,
     /// a page to open and closing a session on a different machine wait for the user, unless you
-    /// trust that machine.
+    /// trust that machine. A letter that names a machine this Shepherdr doesn't keep is left for
+    /// another Shepherdr that does.
     public static func plan(_ letter: Letter, folder: String, context: MailContext, now: Date = Date()) -> [MailAction] {
         let origin = context.origin
         let sender = letter.sender.map { Agent.ID(machineID: origin.id, terminalID: $0.terminalID) }
@@ -157,9 +219,10 @@ public enum MailPlanner {
             case .here:
                 child = Agent.ID(machineID: origin.id, terminalID: spawned.terminalID)
             case .profile(let profile):
-                // Only this Mac's Herdr profiles mean anything to Shepherdr.
+                // Only this Mac's Herdr profiles mean anything to Shepherdr: another machine's are
+                // for the Shepherdr running there.
                 guard origin.isLocal, let machine = context.machines.first(where: { $0.profileID == profile }) else {
-                    return [.problem(sender, "A session started on a machine Shepherdr doesn't know couldn't be linked.")]
+                    return [.elsewhere]
                 }
                 child = Agent.ID(machineID: machine.id, terminalID: spawned.terminalID)
             }
@@ -174,12 +237,14 @@ public enum MailPlanner {
             return actions
 
         case .spawnRequest(let request):
+            guard context.knowsMachine(named: request.machine) else { return [.elsewhere] }
             var kept = item(.spawnRequest, recipient: nil, status: context.isTrusted ? .queued : .needsApproval)
             kept.request = MailItem.Request(machine: request.machine, directory: request.directory, agent: request.agent,
                                             name: request.name, wait: request.wait)
             return [.keep(kept)]
 
         case .handoff(let to):
+            if let to, context.namesUnknownMachine(to) { return [.elsewhere] }
             let recipients: [Agent.ID]
             var problem: String?
             if let to {
@@ -206,6 +271,7 @@ public enum MailPlanner {
             }
 
         case .wait(let names):
+            guard !names.contains(where: context.namesUnknownMachine) else { return [.elsewhere] }
             guard let sender else { return [needsSender("wait for other sessions")] }
             return names.map { name in
                 switch SessionLookup.find(name, in: context.rows, machines: context.machines, macName: context.macName,
@@ -218,6 +284,7 @@ public enum MailPlanner {
             }
 
         case .resume(let names):
+            guard !names.contains(where: context.namesUnknownMachine) else { return [.elsewhere] }
             guard let sender else { return [needsSender("resume a session")] }
             guard !names.isEmpty else { return [.stopWaiting(sender, for: nil)] }
             return names.map { name in
@@ -245,6 +312,7 @@ public enum MailPlanner {
             return [.notify(sender, letter.message ?? "")]
 
         case .close(let names, let force):
+            guard !names.contains(where: context.namesUnknownMachine) else { return [.elsewhere] }
             guard let sender else { return [needsSender("close a session")] }
             let protected = "Compass's own session can't be closed this way."
             // Ending a session is always the user's call: each one asked for waits for their CLOSE,
