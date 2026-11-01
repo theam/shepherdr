@@ -1,17 +1,15 @@
 Native macOS console for herding your coding agents across your Herdr machines: one prioritized queue, the real terminal of every session, a browser per session, and a notification when it's your turn.
 
-### What's new in 0.9.1
+### What's new in 0.9.2
 
 From 0.8.7 on, Shepherdr offers this version itself, at the foot of the sidebar.
 
-- **Split a session's terminal.** **⌘D** opens a shell beside the pane you work in and **⇧⌘D** one below it, in the same folder; splits made in Herdr show the same way. Click a pane to work in it. **⌘W**, or `exit` in its shell, closes it.
-- **Dictation moves to ⇧⌘M,** since ⇧⌘D now splits the terminal.
-- **Changes show at once.** A session you create, split, close, rename or start an agent in no longer waits for every machine to answer, so a slow remote doesn't hold up the rest.
-- **Slack links open in your default browser,** where Slack offers its app, instead of in the session's browser. **Sign in with Slack** still works in a page.
+- **More than one Shepherdr.** Run Shepherdr on a Mac that another one keeps as a remote machine, and each request from an agent is carried out once, by whichever gets to it. What waits for you shows on both Macs: let it through in either. Each Shepherdr writes its own list of machines, so agents reach the machines of both. Update every Mac that runs Shepherdr: 0.9.1 and earlier take every letter they read. Your machines are offered the updated agent tools.
+- **Nothing starts or arrives twice.** A session started for a request, and a pane that got a handoff, keep a note in Herdr. Letting a request through again, such as after a restart, links its session instead of starting another.
 
 ### Fixed
 
-- **Rename Session** showed an empty name after the first rename, and sometimes didn't appear. **Rename Group** and **New Group** had the same problem.
+- A session an agent asked for on another Mac never started when the agent's own Mac also ran Shepherdr: that Shepherdr took the request and couldn't start it.
 
 ### Download and install
 

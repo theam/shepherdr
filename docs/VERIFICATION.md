@@ -1,6 +1,6 @@
 # Verification
 
-## Letters carried out once by any Shepherdr (unreleased)
+## Letters carried out once by any Shepherdr (0.9.2)
 
 Validated on 2026-11-01 on macOS 26.6.2 with Xcode 27 / Swift 6.4 and Herdr 0.9.3:
 
