@@ -98,7 +98,7 @@ done_test() { passed=$((passed + 1)); }
 setup version
 run version
 expect_status 0
-expect_output "shepherdr 5 (protocol 1)"
+expect_output "shepherdr 6 (protocol 1)"
 run help
 expect_output "shepherdr spawn [options]"
 run skill
@@ -120,6 +120,46 @@ expect_output "hasn't written its machine list"
 run spawn --machine Homelab
 expect_status 1
 expect_output "only this machine is known"
+done_test
+
+setup lists
+# Two Shepherdrs keep this machine, each with its own list; an older one writes the single list.
+mkdir -p "$home/.shepherdr/lists"
+{
+    printf '# shepherdr machines 1 rev aaaaaaaaaaaa 2026-11-01T10:00:00Z\n'
+    printf 'Micro\there\t-\n'
+    printf 'Laptop\tshepherdr\t-\n'
+    printf 'Homelab\tshepherdr\t-\n'
+} >"$home/.shepherdr/lists/0123456789ab"
+{
+    printf '# shepherdr machines 1 rev bbbbbbbbbbbb 2026-11-01T11:00:00Z\n'
+    printf 'Micro\there\t-\n'
+    printf 'buildbox\tshepherdr\t-\n'
+} >"$home/.shepherdr/lists/ba9876543210"
+# A Shepherdr that hasn't checked this machine in years.
+{
+    printf '# shepherdr machines 1 rev cccccccccccc 2020-01-01T00:00:00Z\n'
+    printf 'Ghost\tshepherdr\t-\n'
+} >"$home/.shepherdr/lists/cccccccccccc"
+touch -t 202001010000 "$home/.shepherdr/lists/cccccccccccc"
+run machines
+expect_status 0
+expect_output "You are on Micro"
+expect_output "written 2026-11-01T11:00:00Z"
+expect_output "Laptop                   shepherdr  asks the user to approve it in Shepherdr"
+# A route through this machine's Herdr beats asking a Shepherdr.
+expect_output "Homelab                  direct     starts it there right away"
+case $output in *Ghost*) problem "a list nobody checks was read: $output" ;; esac
+[ "$(printf '%s\n' "$output" | grep -c buildbox)" -eq 1 ] || problem "buildbox listed more than once: $output"
+run spawn --machine laptop --name lap-fix
+expect_status 0
+expect_output "Asked Shepherdr to start lap-fix on Laptop."
+the_letter
+expect_json '"kind":"spawn-request"'
+expect_json '"machine":"Laptop"'
+run spawn --machine Ghost
+expect_status 1
+expect_output "No machine named \"Ghost\""
 done_test
 
 setup spawn_here

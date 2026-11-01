@@ -51,6 +51,9 @@ public final class AgentToolsStore {
     public private(set) var unshared: Set<String>
     /// What this Mac is called in the machine lists; its computer name until you choose one.
     public private(set) var macName: String
+    /// This Shepherdr among others that may keep the same machines: its machine list on each is
+    /// named after it. Made once, at random.
+    public let instanceID: String
     @ObservationIgnored private let defaults: UserDefaults
 
     enum Keys {
@@ -59,6 +62,7 @@ public final class AgentToolsStore {
         static let trusted = "agentTools.trusted"
         static let unshared = "agentTools.unshared"
         static let macName = "agentTools.macName"
+        static let instance = "agentTools.instance"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -68,6 +72,12 @@ public final class AgentToolsStore {
         trusted = Set(defaults.stringArray(forKey: Keys.trusted) ?? [])
         unshared = Set(defaults.stringArray(forKey: Keys.unshared) ?? [])
         macName = defaults.string(forKey: Keys.macName).map(MachineList.clean) ?? MachineList.defaultMacName
+        if let saved = defaults.string(forKey: Keys.instance), AgentTools.isInstance(saved) {
+            instanceID = saved
+        } else {
+            instanceID = (0..<6).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+            defaults.set(instanceID, forKey: Keys.instance)
+        }
     }
 
     public func tools(on machineID: String) -> MachineTools { machines[machineID] ?? MachineTools() }

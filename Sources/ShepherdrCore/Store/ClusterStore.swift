@@ -309,6 +309,11 @@ public final class ClusterStore {
         learnCheckouts()
     }
 
+    /// Reads one machine again now, such as before acting on what its snapshot says.
+    public func refresh(machine id: String) async {
+        await refreshAfterChange(on: id)
+    }
+
     /// A refresh already in flight may have started before the change; wait for it, then read again.
     private func refreshAfterChange() async {
         while isRefreshing {

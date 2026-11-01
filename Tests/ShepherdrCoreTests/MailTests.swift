@@ -85,15 +85,50 @@ struct MailPlannerTests {
         #expect(prompt.kind == .prompt && prompt.recipient == child && prompt.status == .queued)
         #expect(MailPlanner.prompt(for: prompt, message: "Fix the test", messagePath: nil, attachments: []) == "Fix the test")
 
-        // A remote machine's letter can't name the Mac's Herdr profiles.
-        let fromBox = MailPlanner.plan(spawned, folder: "/x", context: context(box))
-        #expect(fromBox.count == 1)
-        if case .problem = fromBox[0] {} else { Issue.record("expected a problem, got \(fromBox)") }
+        // A remote machine's profiles mean something only to the Shepherdr running there.
+        #expect(MailPlanner.plan(spawned, folder: "/x", context: context(box)) == [.elsewhere])
 
         // Without --no-wait it waits; with it, it only takes its place.
         let free = try letter("{\(from),\"kind\":\"spawned\",\"child\":{\"machine\":\"here\",\"pane\":\"w9:p1\",\"terminal\":\"term_new\"},\"name\":\"x\",\"agent\":null,\"wait\":false,\"prompt\":\"none\"}")
         #expect(MailPlanner.plan(free, folder: "/x", context: context(box)) ==
                 [.place(.init(machineID: box.id, terminalID: "term_new"), after: .init(machineID: box.id, terminalID: "term_fixer"))])
+    }
+
+    @Test func lettersNamingAMachineThisShepherdrDoesntKeepAreLeftForAnother() throws {
+        // Another Shepherdr keeps a Mac this one doesn't: a session requested there is for that one.
+        let request = try letter("{\(from),\"kind\":\"spawn-request\",\"machine\":\"Laptop\",\"cwd\":\"~\",\"agent\":\"claude\",\"name\":\"docs-fix\",\"wait\":true,\"prompt\":null}")
+        let elsewhere = MailPlanner.plan(request, folder: "/x", context: context(box))
+        #expect(elsewhere == [.elsewhere])
+        #expect(MailHandling(elsewhere) == .elsewhere)
+        // This Mac and its machines go by their names in the lists, in any case.
+        for name in ["studio", "Homelab", "BUILDBOX"] {
+            let known = try letter("{\(from),\"kind\":\"spawn-request\",\"machine\":\"\(name)\",\"cwd\":\"~\",\"agent\":null,\"name\":null,\"wait\":false,\"prompt\":null}")
+            #expect(MailHandling(MailPlanner.plan(known, folder: "/x", context: context(box))) == .waitsForUser, "\(name)")
+        }
+        // Sessions named on a machine it doesn't keep.
+        let handoff = try letter("{\(from),\"kind\":\"handoff\",\"to\":\"planner@Laptop\",\"body\":\"message.md\",\"files\":[]}", message: "Done")
+        #expect(MailPlanner.plan(handoff, folder: "/x", context: context(box)) == [.elsewhere])
+        for json in ["\"kind\":\"wait\",\"sessions\":[\"planner\",\"reviewer@Laptop\"]", "\"kind\":\"resume\",\"sessions\":[\"reviewer@Laptop\"]",
+                     "\"kind\":\"close\",\"sessions\":[\"reviewer@Laptop\"],\"force\":false"] {
+            #expect(MailPlanner.plan(try letter("{\(from),\(json)}"), folder: "/x", context: context(box)) == [.elsewhere], "\(json)")
+        }
+        // A machine it does keep is looked up as before.
+        let known = try letter("{\(from),\"kind\":\"handoff\",\"to\":\"planner@Studio\",\"body\":\"message.md\",\"files\":[]}", message: "Done")
+        #expect(items(MailPlanner.plan(known, folder: "/x", context: context(box))).first?.recipient == planner.id)
+    }
+
+    @Test func whatOnlyAsksTheUserWaitsUnclaimedAndTheRestIsClaimedAtOnce() throws {
+        let handoff = try letter("{\(from),\"kind\":\"handoff\",\"to\":null,\"body\":\"message.md\",\"files\":[]}", message: "Done")
+        let waits = [planner.id: [fixer.id]]
+        // From another machine to this Mac, it asks first; from a machine you trust, it goes.
+        #expect(MailHandling(MailPlanner.plan(handoff, folder: "/x", context: context(box, waits: waits))) == .waitsForUser)
+        #expect(MailHandling(MailPlanner.plan(handoff, folder: "/x", context: context(box, trusted: true, waits: waits))) == .applies)
+        // With nobody waiting, you pick where it goes: that asks too.
+        #expect(MailHandling(MailPlanner.plan(handoff, folder: "/x", context: context(box))) == .waitsForUser)
+        // Notifications, holds and pins apply at once.
+        let notify = try letter("{\(from),\"kind\":\"notify\"}", message: "Hi")
+        #expect(MailHandling(MailPlanner.plan(notify, folder: "/x", context: context(box))) == .applies)
+        #expect(MailHandling([]) == .applies)
     }
 
     @Test func handoffsGoToWhoeverWaitsAndAskBeforeCrossingFromAnotherMachine() throws {
@@ -293,6 +328,31 @@ struct MailStoreTests {
         #expect(again.hasRead("20261015T101503Z-7f3a9c", from: box.id))
         again.remove("b")
         #expect(MailStore(defaults: defaults).items.map(\.id) == ["a"])
+    }
+
+    @Test func recentlyReadLettersAreTheOnesATripSkips() {
+        let store = MailStore(defaults: defaults())
+        store.markRead(["20261015T101502Z-aaaaaa"], from: box.id, at: Date().addingTimeInterval(-9 * 86_400))
+        store.markRead(["20261015T101503Z-bbbbbb", "20261015T101504Z-cccccc"], from: box.id)
+        store.markRead(["20261015T101505Z-dddddd"], from: lab.id)
+        #expect(store.recentlyRead(from: box.id) == ["20261015T101504Z-cccccc", "20261015T101503Z-bbbbbb"])
+        #expect(store.recentlyRead(from: box.id, limit: 1) == ["20261015T101504Z-cccccc"])
+    }
+
+    @Test func mailKeptBeforeClaimsNeedsNoClaim() throws {
+        let kept = item("a", sender: nil, recipient: nil, status: .needsApproval)
+        let data = try JSONEncoder().encode([kept])
+        #expect(!String(decoding: data, as: UTF8.self).contains("isClaimed"))
+        #expect(try JSONDecoder().decode([MailItem].self, from: data).first?.needsClaim == false)
+        var waiting = kept
+        waiting.isClaimed = false
+        #expect(waiting.needsClaim)
+    }
+
+    @Test func deliveriesAreNamedTheSameOnEveryShepherdr() {
+        #expect(item("remote:3c9e10aa/20261015T101502Z-7f3a9c/1", sender: nil, recipient: nil, status: .queued).deliveryID == "20261015T101502Z-7f3a9c/1")
+        #expect(item("local/20261015T101502Z-7f3a9c/0/prompt", sender: nil, recipient: nil, status: .queued).deliveryID == "20261015T101502Z-7f3a9c/0/prompt")
+        #expect(item("compass/20261015T101502Z-7f3a9c", sender: nil, recipient: nil, status: .queued).deliveryID == "20261015T101502Z-7f3a9c")
     }
 
     @Test func onlyNewDoorbellsCallForATrip() {

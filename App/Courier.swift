@@ -6,6 +6,11 @@ import ShepherdrCore
 /// Shepherdr's side of the agent tools. It keeps them installed where you want them and writes
 /// each machine its list. It collects the letters agents leave, from this Mac and over SSH, and
 /// carries out what they ask. Every connection starts here: machines never connect back.
+///
+/// Another Shepherdr, on another Mac, may keep the same machines. Every letter is carried out
+/// once: by the Shepherdr that claims it first, right away for what applies on its own, and when
+/// you act on it for what waits for you, which both offer until then. A letter that names a
+/// machine this Shepherdr doesn't keep is left for one that does.
 @MainActor @Observable
 final class Courier {
     let tools: AgentToolsStore
@@ -31,17 +36,24 @@ final class Courier {
     @ObservationIgnored private var asking = Set<Agent.ID>()
     /// Sessions that asked to close themselves, waiting for their agent to finish its turn.
     @ObservationIgnored private var closingWhenFree = Set<Agent.ID>()
+    /// When each letter you let through was last claimed for, so a machine that doesn't answer
+    /// isn't asked again on every refresh.
+    @ObservationIgnored private var lastClaim: [String: Date] = [:]
 
     /// A session's agent gets one delivery at a time: the next waits until it worked on this one.
     private static let deliveryGap: TimeInterval = 20
     /// Machines are checked again at most this often when you open one of their sessions.
     private static let recheck: TimeInterval = 600
+    /// A machine with the tools is checked at least this often, which keeps this Shepherdr's list
+    /// among those its agents read: lists nobody checked in a week are left out.
+    private static let keepListed: TimeInterval = 6 * 3_600
 
     init(tools: AgentToolsStore = AgentToolsStore(), mail: MailStore = MailStore()) {
         self.tools = tools
         self.mail = mail
         kit = try? AgentTools.bundled()
-        // A request that was starting when Shepherdr quit may not have started: ask again.
+        // A request that was starting when Shepherdr quit may not have started: ask again. Starting
+        // it links the session if it did.
         for item in mail.items where item.kind == .spawnRequest && item.status == .queued {
             mail.update(item.id) { $0.status = .needsApproval }
         }
@@ -62,6 +74,18 @@ final class Courier {
         return MachineList.name(of: machine, among: catalog, macName: tools.macName)
     }
 
+    /// What this Shepherdr leaves on the letters it claims.
+    private var claimant: Mailbox.Claimant { Mailbox.Claimant(instance: tools.instanceID, name: tools.macName) }
+
+    /// Whether a claim makes the letter this Shepherdr's: claimed now, or on a try whose answer was lost.
+    private func isOurs(_ claim: Mailbox.Claim?) -> Bool {
+        switch claim {
+        case .claimed: true
+        case .taken(let by): by?.instance == tools.instanceID
+        case nil: false
+        }
+    }
+
     // MARK: Following refreshes
 
     /// Called after every refresh: checks machines seen for the first time, collects where a
@@ -71,10 +95,13 @@ final class Courier {
         for state in cluster.machines where state.connection == .online {
             let id = state.id
             let current = tools.tools(on: id)
+            let sinceCheck = Date().timeIntervalSince(current.lastCheck ?? .distantPast)
             switch current.status {
             case .unknown:
                 check(id)
-            case .failed where Date().timeIntervalSince(current.lastCheck ?? .distantPast) > Self.recheck:
+            case .failed where sinceCheck > Self.recheck:
+                check(id)
+            case let status where status.isInstalled && sinceCheck > Self.keepListed:
                 check(id)
             default:
                 if current.status.isInstalled, let bells = state.snapshot?.doorbells, mail.hasNewDoorbells(bells, on: id) {
@@ -82,6 +109,7 @@ final class Courier {
                 }
             }
         }
+        confirmPending()
         syncLists()
         deliver()
         settleMissingRecipients()
@@ -127,14 +155,19 @@ final class Courier {
             let bells = self.cluster?.machines.first { $0.id == machineID }?.snapshot?.doorbells ?? [:]
             let found: AgentTools.Check
             do {
-                found = try await AgentTools.check(machine)
+                found = try await AgentTools.check(machine, instance: self.tools.instanceID)
             } catch {
                 self.tools.recordFailedCheck(AppModel.failure(error).message, on: machineID)
                 return
             }
             self.tools.record(found, on: machineID, bundled: kit.version)
             if found.version == nil { return }
-            if found.waitingLetters > 0 { await self.collectNow(machineID) } else { self.mail.answer(bells, on: machineID) }
+            if found.waitingLetters > 0 {
+                await self.collectNow(machineID)
+            } else {
+                self.retireClaimedElsewhere(on: machineID, waiting: [])
+                self.mail.answer(bells, on: machineID)
+            }
             let outdated = if case .outdated = self.tools.status(on: machineID) { true } else { false }
             // Codex installed after the tools, or an update you let through without asking.
             if found.lacksSkill || (outdated && self.tools.updatePolicy == .always) {
@@ -156,8 +189,8 @@ final class Courier {
         tools.set(.installing, on: machineID)
         let entries = listEntries(for: machine)
         do {
-            try await AgentTools.install(kit, list: MachineList.render(entries), on: machine)
-            let found = try await AgentTools.check(machine)
+            try await AgentTools.install(kit, list: MachineList.render(entries), instance: tools.instanceID, on: machine)
+            let found = try await AgentTools.check(machine, instance: tools.instanceID)
             tools.record(found, on: machineID, bundled: kit.version)
         } catch {
             let failure = AppModel.failure(error)
@@ -172,7 +205,7 @@ final class Courier {
             guard let self, let machine = self.machine(machineID), let kit = self.kit else { return }
             do {
                 try await AgentTools.uninstall(from: machine)
-                self.tools.record(try await AgentTools.check(machine), on: machineID, bundled: kit.version)
+                self.tools.record(try await AgentTools.check(machine, instance: self.tools.instanceID), on: machineID, bundled: kit.version)
             } catch {
                 self.tools.set(.failed(AppModel.failure(error).message), on: machineID)
             }
@@ -231,7 +264,7 @@ final class Courier {
         let revision = MachineList.revision(of: entries)
         guard tools.tools(on: machineID).check?.listRevision != revision else { return }
         do {
-            try await AgentTools.writeList(MachineList.render(entries), on: machine)
+            try await AgentTools.writeList(MachineList.render(entries), instance: tools.instanceID, on: machine)
             tools.recordList(revision, on: machineID)
             listFailures[machineID] = nil
         } catch {
@@ -250,6 +283,9 @@ final class Courier {
         }
     }
 
+    /// Brings the letters waiting on a machine that this Shepherdr hasn't read. What only asks you
+    /// waits here unclaimed, and everywhere else it's offered; what applies on its own is claimed,
+    /// in one trip, and carried out only where the claim lands.
     private func collectNow(_ machineID: String) async {
         guard let machine = machine(machineID) else { return }
         // The doorbells seen before the trip are the ones it answers.
@@ -257,46 +293,85 @@ final class Courier {
         var more = true
         while more {
             let delivery: Mailbox.Delivery
-            do { delivery = try await Mailbox.collect(from: machine) } catch { return }
+            do { delivery = try await Mailbox.collect(from: machine, skipping: mail.recentlyRead(from: machineID)) } catch { return }
             more = delivery.hasMore
-            var filed: [String] = []
-            for collected in delivery.letters {
-                if mail.hasRead(collected.id, from: machineID) {
-                    filed.append(collected.id)
-                    continue
-                }
+            var read: [String] = []
+            var setAside: [String] = []
+            var applying: [(id: String, actions: [MailAction])] = []
+            for collected in delivery.letters where !mail.hasRead(collected.id, from: machineID) {
                 if let size = collected.oversize {
-                    // Filed unread: it moves to outbox/.collected there and stops holding up the letters after it.
+                    // Claimed unread: it moves to outbox/.collected there and stops holding up the letters after it.
                     let bytes = { (count: Int) in ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file) }
                     notices.append("A letter from \(name(of: machineID)) was set aside: at \(bytes(size)), it's over the \(bytes(Mailbox.tripLimit)) a letter may take.")
-                    filed.append(collected.id)
+                    setAside.append(collected.id)
                     continue
                 }
                 do {
                     let letter = try Letter(id: collected.id, contents: collected.contents)
                     let folder = try Mailbox.keep(collected, from: machine, in: inbox)
-                    apply(letter, from: machine, folder: folder)
+                    let actions = plan(letter, from: machine, folder: folder)
+                    switch MailHandling(actions) {
+                    case .elsewhere:
+                        read.append(collected.id)
+                    case .waitsForUser:
+                        apply(actions, from: machine, claimed: false)
+                        read.append(collected.id)
+                    case .applies:
+                        applying.append((collected.id, actions))
+                    }
                 } catch let error as LetterError {
                     // A letter Shepherdr can't read is set aside, so it doesn't come back.
                     notices.append("A letter from \(name(of: machineID)) couldn't be read: \(error.message)")
+                    setAside.append(collected.id)
                 } catch {
                     // Not kept on this Mac: leave it there for the next trip.
                     continue
                 }
-                filed.append(collected.id)
             }
-            mail.markRead(filed, from: machineID)
-            do { try await Mailbox.acknowledge(filed, on: machine) } catch { return }
+            let claiming = applying.map(\.id) + setAside
+            if !claiming.isEmpty {
+                // Unclaimed, it stays unread, for the next trip. What was set aside was said once.
+                guard let claims = try? await Mailbox.claim(claiming, as: claimant, on: machine) else {
+                    mail.markRead(read + setAside, from: machineID)
+                    return
+                }
+                for (id, actions) in applying where isOurs(claims[id]) {
+                    apply(actions, from: machine, claimed: true)
+                }
+                read += claiming
+            }
+            mail.markRead(read, from: machineID)
+            if !more {
+                retireClaimedElsewhere(on: machineID, waiting: Set(delivery.waiting))
+            } else if read.isEmpty {
+                // Nothing moved: the next trip would bring the same letters.
+                break
+            }
         }
         mail.answer(bells, on: machineID)
     }
 
-    private func apply(_ letter: Letter, from machine: Machine, folder: URL) {
-        guard let model else { return }
+    /// Takes back what waited for you here once its letter left the outbox: another Shepherdr
+    /// claimed it, or none did within a week. What you let through finds out from its own claim:
+    /// the letter may have left as this Shepherdr claimed it.
+    private func retireClaimedElsewhere(on machineID: String, waiting: Set<String>) {
+        for item in mail.items where item.origin == machineID && item.needsClaim && item.status != .confirming
+            && !waiting.contains(item.letterID) {
+            mail.remove(item.id)
+        }
+    }
+
+    private func plan(_ letter: Letter, from machine: Machine, folder: URL) -> [MailAction] {
+        guard let model else { return [] }
         let context = MailContext(origin: machine, isTrusted: tools.trusted.contains(machine.id), rows: model.cluster.agents,
                                   machines: catalog, macName: tools.macName, waits: model.relations.waits,
                                   protected: model.compass.terminal.map { [$0] } ?? [])
-        let actions = MailPlanner.plan(letter, folder: folder.path, context: context)
+        return MailPlanner.plan(letter, folder: folder.path, context: context)
+    }
+
+    /// Carries out a letter's actions. Mail it keeps is claimed or not, as its letter is.
+    private func apply(_ actions: [MailAction], from machine: Machine, claimed: Bool) {
+        guard let model else { return }
         for action in actions {
             switch action {
             case .wait(let waiter, let awaited):
@@ -308,7 +383,8 @@ final class Courier {
             case .place(let child, let parent):
                 // Compass isn't in the queue: what it starts joins the end.
                 model.order.insert(child, model.compass.isCompass(parent) ? .end : .after(.session(parent)))
-            case .keep(let item):
+            case .keep(var item):
+                item.isClaimed = claimed
                 mail.add(item)
                 if item.kind == .spawnRequest, item.status == .queued {
                     start(item)
@@ -325,6 +401,8 @@ final class Courier {
                 model.sessionNotices[session] = text
             case .problem(nil, let text):
                 notices.append(text)
+            case .elsewhere:
+                continue
             }
         }
         for close in handoffCloses.values {
@@ -346,6 +424,11 @@ final class Courier {
         guard let model else { return }
         let now = Date()
         for item in mail.items where item.status == .queued && (item.kind == .handoff || item.kind == .prompt) {
+            // Delivered already, before a restart: the recipient's pane keeps its last delivery.
+            if let recipient = item.recipient, !delivering.contains(item.id), wasDelivered(item, to: recipient) {
+                remove(item)
+                continue
+            }
             guard !delivering.contains(item.id), let recipient = item.recipient, let row = model.row(for: recipient), !row.isStale,
                   row.agent.state == .idle || row.agent.state == .done,
                   now.timeIntervalSince(lastDelivery[recipient] ?? .distantPast) > Self.deliveryGap,
@@ -355,6 +438,11 @@ final class Courier {
             lastDelivery[recipient] = now
             Task { await transmit(item, to: row) }
         }
+    }
+
+    private func wasDelivered(_ item: MailItem, to recipient: Agent.ID) -> Bool {
+        let tokens = cluster?.machines.first { $0.id == recipient.machineID }?.snapshot?.tokens[recipient.terminalID]
+        return tokens?[LetterTokens.delivered] == item.deliveryID
     }
 
     private func transmit(_ item: MailItem, to row: AgentRow) async {
@@ -376,6 +464,8 @@ final class Courier {
             }
             let text = MailPlanner.prompt(for: item, message: message, messagePath: messagePath, attachments: attachments)
             try await model.cluster.prompt(paneID: row.agent.paneID, text: text, onMachine: row.id.machineID)
+            _ = await model.cluster.reportTokens(paneID: row.agent.paneID, set: [LetterTokens.delivered: item.deliveryID], clear: [],
+                                                 onMachine: row.id.machineID)
             remove(item)
         } catch {
             let failure = AppModel.failure(error)
@@ -529,8 +619,12 @@ final class Courier {
     // MARK: Your decisions
 
     /// Lets an item through: a handoff is delivered once its recipient is free, a session starts,
-    /// a page opens.
+    /// a page opens. While its letter waits for any Shepherdr, this one claims it first.
     func approve(_ item: MailItem) {
+        if item.needsClaim { confirm(item) } else { carryOut(item) }
+    }
+
+    private func carryOut(_ item: MailItem) {
         switch item.kind {
         case .handoff, .prompt:
             mail.update(item.id) {
@@ -562,13 +656,75 @@ final class Courier {
     func send(_ item: MailItem, to recipient: Agent.ID) {
         mail.update(item.id) {
             $0.recipient = recipient
-            $0.status = .queued
             $0.problem = nil
         }
-        deliver()
+        if let chosen = mail.item(item.id) { approve(chosen) }
     }
 
-    func discard(_ item: MailItem) { remove(item) }
+    /// Drops an item. The last one of a letter that waits for any Shepherdr takes it from the
+    /// others too.
+    func discard(_ item: MailItem) {
+        remove(item)
+        guard item.needsClaim, !mail.items.contains(where: { $0.origin == item.origin && $0.letterID == item.letterID }),
+              let machine = machine(item.origin) else { return }
+        let claimant = claimant
+        enqueue(item.origin) { _ = try? await Mailbox.claim([item.letterID], as: claimant, on: machine) }
+    }
+
+    private func claimKey(_ item: MailItem) -> String { "claim:\(item.origin)/\(item.letterID)" }
+
+    /// Claims the letter of an item you let through, then carries it out. Where another Shepherdr
+    /// claimed it first, it's dropped here. While its machine doesn't answer, it waits, and is
+    /// tried again once it does: it's never carried out unclaimed.
+    private func confirm(_ item: MailItem) {
+        let key = claimKey(item)
+        guard !busy.contains(key) else { return }
+        lastClaim[key] = Date()
+        mail.update(item.id) {
+            $0.status = .confirming
+            $0.problem = nil
+        }
+        guard let machine = machine(item.origin) else { return }
+        busy.insert(key)
+        let claimant = claimant
+        enqueue(item.origin) { [weak self] in
+            guard let self else { return }
+            defer { self.busy.remove(key) }
+            let claim: Mailbox.Claim
+            do { claim = try await Mailbox.claim([item.letterID], as: claimant, on: machine)[item.letterID] ?? .taken(by: nil) }
+            catch { return }
+            let letter = self.mail.items.filter { $0.origin == item.origin && $0.letterID == item.letterID }
+            if self.isOurs(claim) {
+                for sibling in letter { self.mail.update(sibling.id) { $0.isClaimed = true } }
+                if let current = self.mail.item(item.id), current.status == .confirming { self.carryOut(current) }
+            } else {
+                for sibling in letter { self.mail.remove(sibling.id) }
+                var handled = "Another Shepherdr already took care of it"
+                if case .taken(let by?) = claim { handled = "Shepherdr on \(by.name) already took care of it" }
+                self.notices.append("\(Self.describe(item)) from \(item.originName): \(handled).")
+            }
+        }
+    }
+
+    /// Claims again for what you let through, once its machine answers.
+    private func confirmPending() {
+        guard let cluster else { return }
+        let now = Date()
+        for item in mail.items where item.status == .confirming {
+            guard cluster.machines.first(where: { $0.id == item.origin })?.connection == .online,
+                  now.timeIntervalSince(lastClaim[claimKey(item)] ?? .distantPast) > 30 else { continue }
+            confirm(item)
+        }
+    }
+
+    private static func describe(_ item: MailItem) -> String {
+        switch item.kind {
+        case .handoff, .prompt: "A handoff"
+        case .spawnRequest: "A session request"
+        case .openPage: "A page"
+        case .close: "A close request"
+        }
+    }
 
     /// Done with an item. A first prompt Shepherdr kept for a session it started, such as one
     /// a Compass page asked for, leaves the disk with it: only letters stay in the inbox.
@@ -607,7 +763,9 @@ final class Courier {
     private func start(_ item: MailItem) {
         guard let model, let request = item.request else { return }
         let names = MachineList.uniqueNames(catalog, macName: tools.macName)
-        guard let machineID = names.first(where: { $0.value.lowercased() == request.machine.lowercased() })?.key else {
+        let wanted = request.machine.trimmingCharacters(in: .whitespaces).lowercased()
+        guard let machineID = names.first(where: { $0.value.lowercased() == wanted })?.key
+                ?? catalog.first(where: { $0.name.lowercased() == wanted })?.id else {
             mail.update(item.id) {
                 $0.status = .failed
                 $0.problem = "No machine is named \(request.machine)."
@@ -624,19 +782,29 @@ final class Courier {
                 await model.readiness.untilReady(host: request.agent.flatMap(Readiness.host(forAgent:)), while: isQueued)
                 guard isQueued() else { return }
             }
-            let created: CreatedSession
-            do {
-                created = try await model.cluster.createSession(NewSessionRequest(directory: request.directory, name: name, agentKind: request.agent),
-                                                                onMachine: machineID)
-            } catch {
-                mail.update(item.id) {
-                    $0.status = .failed
-                    $0.problem = AppModel.failure(error).message
+            // Started already, such as before a restart: the session keeps its letter's ID.
+            await model.cluster.refresh(machine: machineID)
+            let child: Agent.ID
+            if let started = model.cluster.machines.first(where: { $0.id == machineID })?.snapshot?.tokens
+                .first(where: { $0.value[LetterTokens.started] == item.letterID })?.key {
+                child = Agent.ID(machineID: machineID, terminalID: started)
+            } else {
+                let created: CreatedSession
+                do {
+                    created = try await model.cluster.createSession(NewSessionRequest(directory: request.directory, name: name, agentKind: request.agent),
+                                                                    onMachine: machineID)
+                } catch {
+                    mail.update(item.id) {
+                        $0.status = .failed
+                        $0.problem = AppModel.failure(error).message
+                    }
+                    return
                 }
-                return
+                _ = await model.cluster.reportTokens(paneID: created.paneID, set: [LetterTokens.started: item.letterID], clear: [],
+                                                     onMachine: machineID)
+                child = Agent.ID(machineID: machineID, terminalID: created.terminalID)
+                if let notice = created.notice { model.sessionNotices[child] = notice }
             }
-            let child = Agent.ID(machineID: machineID, terminalID: created.terminalID)
-            if let notice = created.notice { model.sessionNotices[child] = notice }
             if let requester = item.sender {
                 model.order.insert(child, .after(.session(requester)))
                 if request.wait { model.relations.setWaiting(requester, for: child, true) }

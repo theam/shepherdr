@@ -108,7 +108,7 @@ struct MailPanel: View {
 
     private func tint(_ item: MailItem) -> Color {
         switch item.status {
-        case .needsApproval, .needsRecipient: Theme.amber
+        case .needsApproval, .needsRecipient, .confirming: Theme.amber
         case .queued: Theme.cyan
         case .failed: Theme.red
         }
@@ -192,6 +192,8 @@ struct MailPanel: View {
             return "Shepherdr delivers it when \(who) is free."
         case .failed:
             return item.problem
+        case .confirming:
+            return "Waiting for \(item.originName) to confirm that no other Shepherdr took it."
         }
     }
 
@@ -227,7 +229,7 @@ struct MailPanel: View {
                 if item.kind != .openPage, item.kind != .close {
                     Button("RETRY") { courier.approve(item) }.buttonStyle(ConsoleButtonStyle(tint: Theme.red))
                 }
-            case .queued:
+            case .queued, .confirming:
                 EmptyView()
             }
             Button("DISCARD") { courier.discard(item) }

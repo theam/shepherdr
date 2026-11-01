@@ -73,7 +73,7 @@ struct AgentToolsTests {
         try FileManager.default.createDirectory(at: home.url.appendingPathComponent(".claude"), withIntermediateDirectories: true)
         let kit = try AgentTools.bundled()
         let list = MachineList.render(MachineList.entries(for: remote, machines: [.local, remote, other], macName: "Studio"))
-        let script = try AgentTools.installScript(kit, list: list)
+        let script = try AgentTools.installScript(kit, list: list, instance: "0123456789ab")
 
         let installed = try home.sh(["-s"], input: script)
         #expect(installed.status == 0, "\(installed.err)")
@@ -83,6 +83,8 @@ struct AgentToolsTests {
         let root = home.url.appendingPathComponent(".shepherdr")
         #expect(FileManager.default.isExecutableFile(atPath: root.appendingPathComponent("bin/shepherdr").path))
         #expect(try String(contentsOf: root.appendingPathComponent("bin/shepherdr"), encoding: .utf8) == kit.files["bin/shepherdr"])
+        // This Shepherdr's own list, and the single list older command lines read.
+        #expect(try String(contentsOf: root.appendingPathComponent("lists/0123456789ab"), encoding: .utf8) == list)
         #expect(try String(contentsOf: root.appendingPathComponent("machines"), encoding: .utf8) == list)
         let skill = home.url.appendingPathComponent(".claude/skills/shepherdr/SKILL.md")
         #expect(try String(contentsOf: skill, encoding: .utf8) == kit.files["skills/shepherdr/SKILL.md"])
@@ -94,17 +96,20 @@ struct AgentToolsTests {
 
         // A check sees what was installed; Codex arriving later lacks the skill.
         try FileManager.default.createDirectory(at: home.url.appendingPathComponent(".codex"), withIntermediateDirectories: true)
-        let check = try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript]).out)
+        let check = try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript, "sh", "0123456789ab"]).out)
         #expect(check.version == kit.version)
         #expect(check.listRevision == MachineList.revision(of: MachineList.entries(for: remote, machines: [.local, remote, other], macName: "Studio")))
         #expect(check.system?.isEmpty == false)
         #expect(check.agents == [.init(name: "claude", isPresent: true, hasSkill: true), .init(name: "codex", isPresent: true, hasSkill: false)])
         #expect(check.lacksSkill)
         #expect(check.waitingLetters == 0)
+        // Another Shepherdr has no list here yet, and an ID that isn't one reads nothing.
+        #expect(try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript, "sh", "ba9876543210"]).out).listRevision == nil)
+        #expect(try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript, "sh", "../machines"]).out).listRevision == nil)
 
         // Installing again replaces the tools in place, and adds the missing skill.
-        #expect(try home.sh(["-s"], input: AgentTools.installScript(kit, list: nil)).status == 0)
-        #expect(try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript]).out).lacksSkill == false)
+        #expect(try home.sh(["-s"], input: AgentTools.installScript(kit, list: nil, instance: "0123456789ab")).status == 0)
+        #expect(try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript, "sh", "0123456789ab"]).out).lacksSkill == false)
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("machines").path))
 
         // The CLI reads the list as written.
@@ -115,6 +120,7 @@ struct AgentToolsTests {
         // Removing leaves only letters behind.
         #expect(try home.sh(["-c", AgentTools.uninstallScript]).out.contains("shepherdr-removed"))
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("bin").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("lists").path))
         #expect(!FileManager.default.fileExists(atPath: skill.path))
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("outbox").path))
         #expect(try AgentTools.parseCheck(home.sh(["-c", AgentTools.checkScript]).out).version == nil)
@@ -125,7 +131,7 @@ struct AgentToolsTests {
     /// fingerprint here: after bumping it, add the new one this test prints.
     @Test func changingTheToolsTakesANewVersion() throws {
         // 3, with `shepherdr run`, only reached test builds; 4 replaces it on their machines.
-        let fingerprints = [1: "421ecfaa5c879c75", 2: "6e89f6a3e43a9be2", 4: "7ced138f11461d6a", 5: "67acf304fec8b032"]
+        let fingerprints = [1: "421ecfaa5c879c75", 2: "6e89f6a3e43a9be2", 4: "7ced138f11461d6a", 5: "67acf304fec8b032", 6: "027e4c8846175811"]
         let kit = try AgentTools.bundled()
         var hash = SHA256()
         for path in kit.files.keys.sorted() where path != "VERSION" {
@@ -189,7 +195,7 @@ struct AgentToolsTests {
                                                     "skills/shepherdr/SKILL.md": "no trailing newline"])
         let home = try ScratchHome()
         defer { home.remove() }
-        #expect(try home.sh(["-s"], input: AgentTools.installScript(kit, list: nil)).status == 0)
+        #expect(try home.sh(["-s"], input: AgentTools.installScript(kit, list: nil, instance: "0123456789ab")).status == 0)
         let cli = try String(contentsOfFile: home.path + "/.shepherdr/bin/shepherdr", encoding: .utf8)
         #expect(cli == "#!/bin/sh\necho \"$HOME\" `x` $(y)\n")
         #expect(try String(contentsOfFile: home.path + "/.shepherdr/VERSION", encoding: .utf8) == "7\n")
@@ -209,7 +215,7 @@ struct LetterContractTests {
     private func installed() throws -> ScratchHome {
         let home = try ScratchHome()
         let list = MachineList.render(MachineList.entries(for: .local, machines: [.local], macName: "Studio"))
-        #expect(try home.sh(["-s"], input: AgentTools.installScript(AgentTools.bundled(), list: list)).status == 0)
+        #expect(try home.sh(["-s"], input: AgentTools.installScript(AgentTools.bundled(), list: list, instance: "0123456789ab")).status == 0)
         return home
     }
 
@@ -241,11 +247,18 @@ struct LetterContractTests {
         let log = try String(contentsOfFile: home.path + "/herdr.log", encoding: .utf8)
         #expect(log.contains("shepherdr-mail=\(letter.id)"))
 
-        // Filing it moves it aside; the next trip finds nothing.
-        let filed = try home.sh(["-c", Mailbox.acknowledgeScript, "sh", letter.id, "../escape"])
-        #expect(filed.out.contains("shepherdr-acknowledged"))
-        #expect(FileManager.default.fileExists(atPath: home.path + "/.shepherdr/outbox/.collected/\(letter.id)/letter.json"))
+        // Reading it doesn't take it: it waits until a Shepherdr claims it.
+        #expect(try collect(home).letters.map(\.id) == [letter.id])
+        // Claiming files it with the claimant's name; the next trip finds nothing.
+        let claims = try Mailbox.parseClaims(home.sh(["-c", Mailbox.claimScript, "sh", "0123456789ab Studio", letter.id, "../escape"]).out)
+        #expect(claims == [letter.id: .claimed])
+        let filed = home.path + "/.shepherdr/outbox/.collected/\(letter.id)"
+        #expect(FileManager.default.fileExists(atPath: filed + "/letter.json"))
+        #expect(try String(contentsOfFile: filed + "/claimed-by", encoding: .utf8) == "0123456789ab Studio\n")
         #expect(try collect(home).letters.isEmpty)
+        // Claiming it again finds who has it.
+        #expect(try Mailbox.parseClaims(home.sh(["-c", Mailbox.claimScript, "sh", "ba9876543210 Laptop", letter.id]).out)
+                == [letter.id: .taken(by: .init(instance: "0123456789ab", name: "Studio"))])
     }
 
     @Test func everyKindOfLetterReadsBack() throws {
@@ -324,6 +337,70 @@ struct LetterContractTests {
         }
     }
 
+    @Test func aLetterAlreadyReadIsOnlyNamedUntilSomeoneClaimsIt() throws {
+        let home = try installed()
+        defer { home.remove() }
+        #expect(try home.shepherdr(["notify", "First"]).status == 0)
+        let first = try collect(home)
+        let id = try #require(first.letters.first?.id)
+        #expect(first.waiting == [id])
+        #expect(try home.shepherdr(["notify", "Second"]).status == 0)
+        let again = try Mailbox.parse(home.sh(["-c", Mailbox.collectScript, "sh", String(Mailbox.tripLimit), id]).data)
+        #expect(again.letters.count == 1 && again.letters.first?.id != id)
+        #expect(Set(again.waiting) == Set([id] + again.letters.map(\.id)))
+    }
+
+    @Test func ofTwoShepherdrsClaimingAtOnceEachLetterGoesToOne() throws {
+        let home = try installed()
+        defer { home.remove() }
+        for index in 0..<12 { #expect(try home.shepherdr(["notify", "Letter \(index)"]).status == 0) }
+        let ids = try outbox(of: home).map(\.lastPathComponent)
+        #expect(ids.count == 12)
+        // Both claim every letter at the same time, in opposite orders.
+        func claim(as name: String, _ ids: [String]) throws -> (Process, Pipe) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", Mailbox.claimScript, "sh", name] + ids
+            process.environment = ["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
+            let output = Pipe()
+            process.standardOutput = output
+            try process.run()
+            return (process, output)
+        }
+        let studio = try claim(as: "0123456789ab Studio", ids), laptop = try claim(as: "ba9876543210 Laptop", ids.reversed())
+        let heard = try [studio, laptop].map { process, output in
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return try Mailbox.parseClaims(String(decoding: data, as: UTF8.self))
+        }
+        for id in ids {
+            let winners = heard.indices.filter { heard[$0][id] == .claimed }
+            #expect(winners.count == 1, "\(id): \(heard.map { $0[id] })")
+            guard let winner = winners.first else { continue }
+            let claimant = winner == 0 ? Mailbox.Claimant(instance: "0123456789ab", name: "Studio") : .init(instance: "ba9876543210", name: "Laptop")
+            #expect(try String(contentsOfFile: home.path + "/.shepherdr/outbox/.collected/\(id)/claimed-by", encoding: .utf8) == claimant.line + "\n")
+            // The other hears who has it, unless it asked before the winner wrote its name.
+            if case .taken(let by) = heard[1 - winner][id] { #expect(by == nil || by == claimant) } else { Issue.record("\(id) wasn't taken") }
+        }
+        #expect(try outbox(of: home).isEmpty)
+    }
+
+    @Test func lettersNobodyClaimsAreFiledAfterAWeek() throws {
+        let home = try installed()
+        defer { home.remove() }
+        #expect(try home.shepherdr(["notify", "Old"]).status == 0)
+        let old = try #require(try outbox(of: home).first)
+        #expect(try home.sh(["-c", "touch -t 202001010000 \"$1\"", "sh", old.path]).status == 0)
+        #expect(try home.shepherdr(["notify", "New"]).status == 0)
+        let delivery = try collect(home)
+        #expect(delivery.letters.count == 1 && delivery.letters.first?.id != old.lastPathComponent)
+        #expect(!delivery.waiting.contains(old.lastPathComponent))
+        let filed = home.path + "/.shepherdr/outbox/.collected/\(old.lastPathComponent)/claimed-by"
+        #expect(try String(contentsOfFile: filed, encoding: .utf8) == "expired\n")
+        #expect(try Mailbox.parseClaims(home.sh(["-c", Mailbox.claimScript, "sh", "0123456789ab Studio", old.lastPathComponent]).out)
+                == [old.lastPathComponent: .taken(by: nil)])
+    }
+
     @Test func onlyTheFilesTheCLIWritesCross() throws {
         let home = try installed()
         defer { home.remove() }
@@ -342,30 +419,48 @@ struct LetterContractTests {
 }
 
 struct MailboxStreamTests {
+    @Test func claimsAreReadAfterAnyBannerAndMustBeComplete() throws {
+        let answer = "Last login: today\nshepherdr-claims 1\nC 20261015T101502Z-7f3a9c\nX 20261015T101503Z-7f3a9c 0123456789ab Studio Mac\n"
+            + "X 20261015T101504Z-7f3a9c expired\nX 20261015T101505Z-7f3a9c -\nX ../x 0123456789ab Studio\nshepherdr-claimed\n"
+        #expect(try Mailbox.parseClaims(answer) == ["20261015T101502Z-7f3a9c": .claimed,
+                                                    "20261015T101503Z-7f3a9c": .taken(by: .init(instance: "0123456789ab", name: "Studio Mac")),
+                                                    "20261015T101504Z-7f3a9c": .taken(by: nil), "20261015T101505Z-7f3a9c": .taken(by: nil)])
+        // Cut short, it says nothing for sure.
+        #expect(throws: HerdrFailure.self) { try Mailbox.parseClaims("shepherdr-claims 1\nC 20261015T101502Z-7f3a9c\n") }
+    }
+
+    @Test func lettersAlreadyReadAreOnlyNamed() throws {
+        let stream = "shepherdr-mail 2\nK 20261015T101502Z-7f3a9c\nL 20261015T101503Z-7f3a9c\nF 2 letter.json\n{}\nK 20261015T101504Z-7f3a9c\nD 0\n"
+        let delivery = try Mailbox.parse(Data(stream.utf8))
+        #expect(delivery.letters.map(\.id) == ["20261015T101503Z-7f3a9c"])
+        #expect(delivery.waiting == ["20261015T101502Z-7f3a9c", "20261015T101503Z-7f3a9c", "20261015T101504Z-7f3a9c"])
+        #expect(throws: HerdrFailure.self) { try Mailbox.parse(Data("shepherdr-mail 2\nK 20261015T101502Z-7f3a9c\nF 2 letter.json\n{}\nD 0\n".utf8)) }
+    }
+
     @Test func streamsSurviveBannersAndRejectSurprises() throws {
-        let stream = "Last login: today\nshepherdr-mail 1\nL 20261015T101502Z-7f3a9c\nF 2 letter.json\n{}\nF 3 files/a.md\nab\n\nD 1\n"
+        let stream = "Last login: today\nshepherdr-mail 2\nL 20261015T101502Z-7f3a9c\nF 2 letter.json\n{}\nF 3 files/a.md\nab\n\nD 1\n"
         let delivery = try Mailbox.parse(Data(stream.utf8))
         #expect(delivery.hasMore)
         #expect(delivery.letters == [.init(id: "20261015T101502Z-7f3a9c", contents: ["letter.json": Data("{}".utf8), "files/a.md": Data("ab\n".utf8)])])
-        for bad in ["shepherdr-mail 1\nF 2 letter.json\n{}\nD 0\n",               // a file outside a letter
-                    "shepherdr-mail 1\nL x\nF 9 letter.json\n{}\nD 0\n",          // shorter than announced
-                    "shepherdr-mail 1\nL x\nF 2 ../../etc/passwd\nab\nD 0\n",     // a path outside the letter
-                    "shepherdr-mail 1\nL x\n",                                    // cut short
+        for bad in ["shepherdr-mail 2\nF 2 letter.json\n{}\nD 0\n",               // a file outside a letter
+                    "shepherdr-mail 2\nL x\nF 9 letter.json\n{}\nD 0\n",          // shorter than announced
+                    "shepherdr-mail 2\nL x\nF 2 ../../etc/passwd\nab\nD 0\n",     // a path outside the letter
+                    "shepherdr-mail 2\nL x\n",                                    // cut short
                     "nothing here\n"] {
             #expect(throws: HerdrFailure.self) { try Mailbox.parse(Data(bad.utf8)) }
         }
-        #expect(try Mailbox.parse(Data("shepherdr-mail 1\nD 0\n".utf8)).letters.isEmpty)
+        #expect(try Mailbox.parse(Data("shepherdr-mail 2\nD 0\n".utf8)).letters.isEmpty)
     }
 
     @Test func aLetterTooLargeComesWithoutItsFiles() throws {
-        let stream = "shepherdr-mail 1\nL 20261015T101502Z-7f3a9c\nT 9000000\nL 20261015T101503Z-7f3a9c\nF 2 letter.json\n{}\nD 0\n"
+        let stream = "shepherdr-mail 2\nL 20261015T101502Z-7f3a9c\nT 9000000\nL 20261015T101503Z-7f3a9c\nF 2 letter.json\n{}\nD 0\n"
         let delivery = try Mailbox.parse(Data(stream.utf8))
         #expect(delivery.letters == [.init(id: "20261015T101502Z-7f3a9c", contents: [:], oversize: 9_000_000),
                                      .init(id: "20261015T101503Z-7f3a9c", contents: ["letter.json": Data("{}".utf8)])])
-        for bad in ["shepherdr-mail 1\nL x\nT 9\nF 2 letter.json\n{}\nD 0\n",   // files after all
-                    "shepherdr-mail 1\nL x\nF 2 letter.json\n{}\nT 9\nD 0\n",   // too large after its files
-                    "shepherdr-mail 1\nT 9\nD 0\n",                              // outside a letter
-                    "shepherdr-mail 1\nL x\nT big\nD 0\n"] {
+        for bad in ["shepherdr-mail 2\nL x\nT 9\nF 2 letter.json\n{}\nD 0\n",   // files after all
+                    "shepherdr-mail 2\nL x\nF 2 letter.json\n{}\nT 9\nD 0\n",   // too large after its files
+                    "shepherdr-mail 2\nT 9\nD 0\n",                              // outside a letter
+                    "shepherdr-mail 2\nL x\nT big\nD 0\n"] {
             #expect(throws: HerdrFailure.self) { try Mailbox.parse(Data(bad.utf8)) }
         }
     }
