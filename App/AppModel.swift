@@ -359,6 +359,8 @@ final class AppModel {
     @ObservationIgnored let readiness = ReadinessMonitor()
     /// Whether Shepherdr keeps this Mac from sleeping; off every time it opens.
     let keepAwake = KeepAwake()
+    /// The relay Shepherdr Remote connects to, off until turned on in Settings → Remote.
+    let relay = RemoteRelay()
 
     init(cluster: ClusterStore = ClusterStore(), order: SessionOrderStore = SessionOrderStore(),
          relations: SessionRelationStore = SessionRelationStore(), sessionStates: SessionStateStore = SessionStateStore()) {
@@ -371,10 +373,12 @@ final class AppModel {
         checksMonitor.restore(from: githubCache)
         courier.model = self
         compass.model = self
+        relay.model = self
         relations.onChange = { [weak self] in self?.settleStatuses() }
         presence.onChange { [weak self] onScreen in
             guard let self else { return }
-            cluster.isOnScreen = onScreen
+            // A phone looking at the queue counts as being on screen.
+            cluster.isOnScreen = onScreen || relay.hasPhones
             guard onScreen else { return }
             // Back on screen: every machine is asked now, rather than at its next turn.
             if cluster.automaticRefresh { Task { await self.cluster.refresh() } }
@@ -813,6 +817,21 @@ final class AppModel {
     /// A session's resources, without opening its workspace: the queue shows them for every session.
     func resources(for id: Agent.ID) -> [SessionResource] {
         workspaces[id]?.resources ?? SessionResources.merge([], into: sessionStates.state(for: id).resources)
+    }
+
+    /// A pull request's or issue's state (`merged`, `open`, `closed`) and a pull request's checks
+    /// (`passed`, `failed`, `running`), as far as the Mac knows: for Compass's page and the phone.
+    func status(of resource: SessionResource) -> (state: String?, checks: String?) {
+        let checks = checksMonitor.checks[resource.key]
+        let state: String? = if let checks { checks.isMerged ? "merged" : checks.isOpen ? "open" : "closed" }
+            else { checksMonitor.issues[resource.key].map { $0.isOpen ? "open" : "closed" } }
+        let result: String? = switch checks?.state {
+        case .passed: "passed"
+        case .failed: "failed"
+        case .running: "running"
+        case .some(.none), nil: nil
+        }
+        return (state, result)
     }
 
     /// The session's pull requests, most relevant first.
@@ -1279,6 +1298,33 @@ final class AppModel {
             // The session's own pane takes the keyboard again.
             if wasFocused { terminalFocusRequest += 1 }
         }
+    }
+
+    /// Panes the Mac let go of while a phone shows them.
+    @ObservationIgnored private var yieldedTerminals: Set<Agent.ID> = []
+
+    /// A phone shows this pane at its own size: the Mac lets go of it until the phone is done.
+    func yieldTerminal(_ id: Agent.ID) {
+        guard let holder = terminals[id], [.connecting, .observing, .interactive].contains(holder.store.status) else { return }
+        holder.store.disconnect()
+        yieldedTerminals.insert(id)
+        sessionNotices[id] = "Your iPhone is showing this session. RECONNECT takes it back here."
+    }
+
+    /// The phone is done with a pane the Mac let go of: the Mac attaches again, and rests the
+    /// terminal as usual if nobody looks at it here.
+    func reclaimTerminal(_ id: Agent.ID) {
+        guard yieldedTerminals.remove(id) != nil else { return }
+        if sessionNotices[id]?.hasPrefix("Your iPhone") == true { sessionNotices[id] = nil }
+        guard let holder = terminals[id], holder.store.status == .disconnected else { return }
+        holder.store.open()
+        let shown = presence.isOnScreen && selectedID.map { $0 == id || focusedPane(in: $0) == id } == true
+        holder.store.setVisible(shown)
+    }
+
+    /// Phones connected or not, the refresh pace follows: a phone looking counts as being on screen.
+    func phonesChanged() {
+        cluster.isOnScreen = presence.isOnScreen || relay.hasPhones
     }
 
     /// Detaches every terminal, as Shepherdr quits.

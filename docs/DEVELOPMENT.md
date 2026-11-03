@@ -68,11 +68,15 @@ Use **Settings → Machines** for failure details. A malformed response is **Inc
 
 ```text
 App/                              SwiftUI presentation: queue sidebar, work area, prompt editor, browser, settings, theme
+  RemoteRelay.swift               The relay Shepherdr Remote connects to: pairing, the queue for phones, their terminals and prompts
+  RemoteSettings.swift            Settings → Remote
   Compass.swift                   Compass: its agent, schedule, runs, page, actions and backup, and the page's bridge
   CompassViews.swift              The mode tabs, Compass's column and work area, and its welcome screen
   ReadinessMonitor.swift          Sleep, dark wakes and the network, for agents Shepherdr starts or prompts unattended
   GitHubInbox*.swift              The overview's GitHub inbox: its sync with GitHub, its columns and suggested order
+Sources/ShepherdrRemote/           The relay's wire protocol, shared with the iOS app: messages, binary frames, pairing links, fingerprints
 Sources/ShepherdrCore/
+  Remote/                         The relay's TLS identity (a self-signed P-256 certificate in DER), its WebSocket server and the paired phones
   Transport/                      CLI adapters, executable discovery, bounded process/stream transports, agent tools and mailbox, Compass's folder and Git
   DTO/                            JSON wire types, validation and domain mapping
   Domain/                         Machine, Workspace, Agent, lifecycle and failure models, project gathering, letters and machine lists, Compass's schedule, settings and actions, readiness to start agents, the GitHub inbox and its suggested order, how a Herdr tab lays out its panes and which shells show inside a session
@@ -85,6 +89,7 @@ Sources/ShepherdrDictation/        On-device dictation: microphone capture and P
 Sources/ShepherdrProbe/            Read-only integration diagnostic
 Tests/ShepherdrCoreTests/          Protocol, transport and store regression tests
 Tests/AgentTools/                  The agent tools' command line, against a fake herdr and a real one
+iOS/                               Shepherdr Remote, the iPhone app: XcodeGen project, SwiftUI views, SwiftTerm's UIKit terminal, dictation
 scripts/make-artwork.sh            Regenerates the icon, README header and social preview (see Artwork)
 scripts/pixelate.swift             Turns art into strict pixel art in App/Theme.swift's palette
 scripts/make-icon.swift            Renders App/Assets.xcassets/AppIcon.appiconset from docs/assets/icon.png
@@ -99,12 +104,50 @@ Compass's pure parts are in Core and tested there: `CompassSchedule` (run times 
 
 See [integration notes](HERDR-INTEGRATION.md) for the inspected contract, compatibility policy, event strategy and limitations.
 
+## Shepherdr Remote (iOS)
+
+The iPhone companion lives in `iOS/`. Its Xcode project is generated from `iOS/project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`, then `xcodegen` in `iOS/`); it depends on this package's `ShepherdrRemote` library and on SwiftTerm 1.10.1, whose UIKit view it uses. It needs iOS 26 or later, for SpeechAnalyzer.
+
+Put your signing team in `iOS/Config/Local.xcconfig`, which git ignores:
+
+```text
+DEVELOPMENT_TEAM = ABCDE12345
+BUNDLE_ID_SUFFIX = .dev
+```
+
+The suffix keeps a personal build's bundle identifier apart from the published one. Then open `iOS/ShepherdrRemote.xcodeproj`, choose your iPhone and press **⌘R**, or build from Terminal with Xcode signed in to your Apple account (Xcode → Settings → Accounts):
+
+```sh
+xcodebuild -project iOS/ShepherdrRemote.xcodeproj -scheme ShepherdrRemote -destination 'id=<your iPhone UDID>' \
+  -derivedDataPath build-ios -allowProvisioningUpdates build
+xcrun devicectl device install app --device <UDID> "build-ios/Build/Products/Debug-iphoneos/Shepherdr Remote.app"
+```
+
+`xcrun devicectl list devices` lists the UDIDs. Once Xcode has made a profile with your iPhone in it, by pressing **⌘R** once, Terminal builds can leave out `-allowProvisioningUpdates` and use that profile: `xcodebuild` in Terminal may not see the account Xcode signed in with. After adding or removing a file under `iOS/ShepherdrRemote`, run `xcodegen` again. Crash reports from the iPhone are a `xcrun devicectl device info files --domain-type systemCrashLogs` away, and `xcrun devicectl device process launch --console` shows the app's output. For the Simulator, sign to run locally (`CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`): without a signature the keychain refuses the pairing token.
+
+**The relay.** One WebSocket over TLS 1.3 (`Network.framework` on both sides). The phone doesn't use URLSession: its App Transport Security refuses a self-signed certificate at a Tailscale address (`NSURLErrorDomain -1200`), though not at `127.0.0.1`, so the Simulator never shows it. `RelaySocket` checks the fingerprint in the TLS handshake itself, with `sec_protocol_options_set_verify_block`. Control messages are JSON text (`ClientMessage`, `ServerMessage`); terminal frames are binary, a 9-byte header and Herdr's ANSI bytes (`RemoteFrame`), with synchronized output and OSC 8 links taken out (`RemoteFrameFilter`). The phone pins the SHA-256 of the certificate's public key, which the pairing link carries; the Mac keeps a SHA-256 of each phone's token in user defaults. Each copy of the app keeps its own identity in the keychain, named after its bundle identifier, so test builds never touch the real one's. Through Tailscale Serve, the relay listens on a free port of 127.0.0.1 and Serve forwards the relay's port to it. That's because Tailscale holds the relay's port on the Mac's tailnet addresses, and while it does, `NWListener` refuses that port at any address with `EADDRINUSE`, even with `allowLocalEndpointReuse`; a BSD socket bound to 127.0.0.1 doesn't. Serve commands run one after another, so that turning forwarding off and on again ends on.
+
+**What the phone gets.** Every second, when it changed, a `QueueSnapshot`: the rows `remoteQueue()` builds in the sidebar's order, each with its group and project lines (`inGroup`, `inProject`), its place in a tree of holds (`QueueTree`, from `WaitForest`), its panes and its resources (`remoteResources(for:)`, ten of each kind, with the state and checks `status(of:)` gives Compass's page too), and Compass's status (`RemoteCompass`, in the words of its column). A row from a Mac that sends none of these still reads. Compass pages travel only on request, `compassPage(day:)`, which reads only a file named like a day. `compassRun` and `compassCancel` do what the column's buttons do, and typing to Compass's agent from the phone holds its runs back as typing on the Mac does. Searching runs on the phone (`QueueSearch`).
+
+The relay logs each connection under the subsystem `com.theagilemonkeys.Shepherdr`, category `relay`: `log stream --predicate 'category == "relay"' --level info`.
+
+**Testing with the Simulator.** The Simulator shares the Mac's network, so it can reach a relay on `127.0.0.1` without exposing anything:
+
+- Start a Herdr server of its own in a scratch home, as in [the agent tools' live test](../Tests/AgentTools/herdr-live.sh), with fake agents that report themselves with `herdr pane report-agent`.
+- Run a copy of the app with a bundle identifier of its own and `CFFIXED_USER_HOME` pointing at the scratch home, which moves `NSHomeDirectory()`, `~` and the caches there. It has no default keychain there, so make one first with `CFFIXED_USER_HOME=<home> security create-keychain -p <password> <home>/Library/Keychains/login.keychain-db`.
+- Pass the settings as arguments: `open -g -n --env CFFIXED_USER_HOME=<home> --env HOME=<home> --env SHEPHERDR_HERDR_PATH=<wrapper> <copy>.app --args -remoteEnabled YES -remotePort 18437 -remoteLoopbackForTesting YES -notifySessions NO`. `remoteLoopbackForTesting`, which isn't in Settings, listens on `127.0.0.1` without asking Tailscale for anything and writes the pairing link to `~/.shepherdr/remote-invite.txt`.
+- Launch the app with `xcrun simctl launch <device> com.theagilemonkeys.ShepherdrRemote.dev -pairInvite "<link>"` to pair, and later with `-openSession <machine>/<terminal>` to open a session or `-openCompass YES` to open Compass, since nobody taps in a headless Simulator. `-pairInvite` only pairs an app that has no Mac yet: `xcrun simctl uninstall` it to start over.
+- Groups, holds and resources live in the copy's user defaults (`sessionOrder.v2`, `sessionWaits.v1`, `sessionState.v1`, all JSON). Quit the copy, edit them with `defaults export` and `defaults import`, and open it again. A folder at `~/.shepherdr/compass` with a `compass.json` of `{"enabled": false}` and pages in `days/` gives it a Compass that never starts an agent.
+
+`RelayServerTests` run a real TLS WebSocket on loopback with the identity in a temporary keychain, a client pinning the right fingerprint and one pinning another.
+
 ## Artwork
 
 The app icon, the README header and the social preview are strict pixel art: every art pixel is a square of the same size, in a color from `App/Theme.swift`. `scripts/pixelate.swift` reads every hex color in that file, divides an image into a grid, averages each cell in linear light and picks the theme color nearest in CIE L\*a\*b\*. `Theme.artworkShades` adds in-between shades that only the artwork uses.
 
 ```sh
-bash scripts/make-artwork.sh
+bash iOS/                               Shepherdr Remote, the iPhone app: XcodeGen project, SwiftUI views, SwiftTerm's UIKit terminal, dictation
+scripts/make-artwork.sh
 ```
 
 regenerates everything from `docs/assets/source`:

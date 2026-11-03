@@ -3,11 +3,13 @@ import PackageDescription
 
 let package = Package(
     name: "Shepherdr",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS("26.0")],
     products: [
         .library(name: "ShepherdrCore", targets: ["ShepherdrCore"]),
         .library(name: "ShepherdrTerminalUI", targets: ["ShepherdrTerminalUI"]),
         .library(name: "ShepherdrDictation", targets: ["ShepherdrDictation"]),
+        // The relay's wire protocol, shared by the Mac and Shepherdr Remote on iOS.
+        .library(name: "ShepherdrRemote", targets: ["ShepherdrRemote"]),
         .executable(name: "shepherdr-probe", targets: ["ShepherdrProbe"]),
         .executable(name: "shepherdr", targets: ["ShepherdrApp"])
     ],
@@ -22,7 +24,8 @@ let package = Package(
         // AgentTools: the command line and skill Shepherdr installs on each machine for agents.
         // Compass: the contract, page template and starter prompt of the Compass folder.
         // Updater: the script that replaces the app with a new release.
-        .target(name: "ShepherdrCore", resources: [.copy("Resources/Markdown"), .copy("Resources/AgentTools"), .copy("Resources/Compass"),
+        .target(name: "ShepherdrRemote"),
+        .target(name: "ShepherdrCore", dependencies: ["ShepherdrRemote"], resources: [.copy("Resources/Markdown"), .copy("Resources/AgentTools"), .copy("Resources/Compass"),
                                                    .copy("Resources/Updater")]),
         .target(name: "ShepherdrTerminalUI",
                 dependencies: ["ShepherdrCore", .product(name: "SwiftTerm", package: "SwiftTerm")],

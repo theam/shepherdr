@@ -10,3 +10,7 @@ xcuserdata/
 *.app/
 .env
 *.log
+
+# Shepherdr Remote: personal signing settings
+iOS/Config/Local.xcconfig
+build-ios/

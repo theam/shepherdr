@@ -1,0 +1,8 @@
+// Shared settings for Shepherdr Remote. Your signing team goes in Local.xcconfig, which git ignores:
+//
+//     DEVELOPMENT_TEAM = ABCDE12345
+//     BUNDLE_ID_SUFFIX = .dev
+//
+// The suffix keeps a personal build's bundle identifier apart from the published one.
+BUNDLE_ID_SUFFIX =
+#include? "Local.xcconfig"

@@ -64,11 +64,13 @@ struct MainView: View {
         .task { await model.watchBackgroundWork() }
         .task { await model.watchCaches() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            model.relay.stop()
             model.closeTerminals()
             model.saveCaches()
         }
         .onAppear { model.compass.start() }
         .onAppear { model.updates.start() }
+        .onAppear { model.relay.start() }
         .onChange(of: refreshSeconds) { configureRefresh() }
         .onChange(of: cluster.agents.map(\.id), initial: true) {
             model.order.synchronize(with: model.agents.map(\.id))
