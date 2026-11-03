@@ -103,3 +103,12 @@ Checked on 2026-10-15 with Herdr 0.9.3 in a server of its own, in a scratch home
 - **Runs.** `agent prompt <pane> <text>` once the agent is `idle` or `done`, as handoffs are delivered. `agent_blocked`, `agent_not_ready` and `agent_busy` are tried again later.
 - **A new day.** `pane close` on every pane in Compass's workspace and folder, then a new workspace. Closing a workspace's only pane closes the workspace.
 - **Awake and online.** Shepherdr runs `agent start` and `agent prompt` for Compass only while this Mac is fully awake and online (see [AGENT-TOOLS](AGENT-TOOLS.md#runs)): Herdr types the agent's plain command, such as `claude`, into the pane's shell, so the moment is the only difference from starting it by hand. An agent started across a sleep or a lost network is replaced before its first prompt as on a new day: `pane close`, then a new workspace and `agent start`.
+
+## Shepherdr Remote (unreleased)
+
+Checked on 2026-11-01 with Herdr 0.9.3 in a server of its own, through the relay of a copy of the app and a test client:
+
+- **A phone's pane.** The relay opens `terminal session control` for each pane a phone shows, at the phone's columns and rows, through the same `TerminalStore` and SSH adapter as the window. Herdr resized the pane's terminal to it: a shell's long line wrapped at the phone's 60 columns. Frames go on to the phone as Herdr sends them, full first, with mode 2026 and OSC 8 taken out.
+- **One controller.** Herdr lets one client control a terminal, so before attaching, the relay has this Mac's own window let go of that pane (`TerminalStore.disconnect`), with a notice; when the phone is done, the window attaches again if it shows the pane. Another client in control makes the phone watch, as the window does, and **TAKE OVER** passes `--takeover` only when you tap it.
+- **Prompts** from the phone go through the phone's control connection as the prompt editor's do, a bracketed paste and a separate Return, or through `agent prompt` when the phone isn't attached to that pane.
+- Not checked: a pane on another machine from the phone, though it goes through the same SSH adapter as the window's.

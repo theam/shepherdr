@@ -75,7 +75,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; color: var(--fain
     <button type="button" data-l="en" aria-pressed="false">EN</button>
     <button type="button" data-l="es" aria-pressed="true">ES</button>
   </div>
-  <nav aria-label="Index"><a href="#start"><span class="es">Empezar</span><span class="en">Get started</span></a><a href="#idea"><span class="es">Qué es</span><span class="en">What it is</span></a><a href="#why"><span class="es">Por qué</span><span class="en">Why</span></a><a href="#features"><span class="es">Qué hace</span><span class="en">Features</span></a><a href="#connect"><span class="es">Conectar Herdr</span><span class="en">Connect Herdr</span></a><a href="#queue"><span class="es">La cola</span><span class="en">The queue</span></a><a href="#session"><span class="es">Una sesión</span><span class="en">A session</span></a><a href="#browser"><span class="es">Navegador y recursos</span><span class="en">Browser and resources</span></a><a href="#alerts"><span class="es">Avisos y dictado</span><span class="en">Alerts and dictation</span></a><a href="#remote"><span class="es">Máquinas remotas</span><span class="en">Remote machines</span></a><a href="#compass"><span class="es">Compass</span><span class="en">Compass</span></a><a href="#keys"><span class="es">Atajos</span><span class="en">Shortcuts</span></a><a href="#tips"><span class="es">Consejos</span><span class="en">Tips</span></a><a href="#help"><span class="es">Si algo falla</span><span class="en">Troubleshooting</span></a><a href="#about"><span class="es">Acerca de</span><span class="en">About</span></a></nav>
+  <nav aria-label="Index"><a href="#start"><span class="es">Empezar</span><span class="en">Get started</span></a><a href="#idea"><span class="es">Qué es</span><span class="en">What it is</span></a><a href="#why"><span class="es">Por qué</span><span class="en">Why</span></a><a href="#features"><span class="es">Qué hace</span><span class="en">Features</span></a><a href="#connect"><span class="es">Conectar Herdr</span><span class="en">Connect Herdr</span></a><a href="#queue"><span class="es">La cola</span><span class="en">The queue</span></a><a href="#session"><span class="es">Una sesión</span><span class="en">A session</span></a><a href="#browser"><span class="es">Navegador y recursos</span><span class="en">Browser and resources</span></a><a href="#alerts"><span class="es">Avisos y dictado</span><span class="en">Alerts and dictation</span></a><a href="#remote"><span class="es">Máquinas remotas</span><span class="en">Remote machines</span></a><a href="#iphone"><span class="es">En el iPhone</span><span class="en">On iPhone</span></a><a href="#compass"><span class="es">Compass</span><span class="en">Compass</span></a><a href="#keys"><span class="es">Atajos</span><span class="en">Shortcuts</span></a><a href="#tips"><span class="es">Consejos</span><span class="en">Tips</span></a><a href="#help"><span class="es">Si algo falla</span><span class="en">Troubleshooting</span></a><a href="#about"><span class="es">Acerca de</span><span class="en">About</span></a></nav>
 </aside>
 <main>
 <header>
@@ -160,6 +160,7 @@ herdr status</code></pre>
 <li><b>Sesiones en espera.</b> Un planificador espera a sus subagentes en un árbol plegable.</li>
 <li><b>Conducir o solo mirar.</b> Candado de solo lectura. Nunca le quita la entrada a otro cliente sin que lo pidas.</li>
 <li><b>Crear y cerrar sesiones</b> con <kbd>⌘N</kbd>.</li>
+<li><b>Tu cola en el bolsillo.</b> Shepherdr Remote, en el iPhone, muestra la cola y la terminal de cualquier sesión, ajustada al móvil, y envía prompts escritos o dictados. Llega a tu Mac por Tailscale, con TLS, sin SSH.</li>
 <li><b>Compass, la página de tu día.</b> Un agente propio la mantiene, y sus botones lanzan las sesiones que propone cuando tú las revisas.</li>
 </ul>
 <p>Sin cuentas, sin telemetría, sin servidor. Los prompts, la salida de la terminal y tu voz nunca se escriben en disco, salvo el primer prompt de una sesión que lanzas desde Compass, que espera hasta que el agente lo recibe y entonces se borra. Solo se recuerdan tu cola, los repos que sigue tu bandeja de GitHub y qué has visto de ellos, lo que GitHub dijo de los PRs, issues y repos por los que preguntó, y, por sesión, sus pestañas y enlaces; con Compass, también lo que muestra la cola, para su agente. El dictado se ejecuta por completo en tu Mac.</p>
@@ -176,6 +177,7 @@ herdr status</code></pre>
 <li><b>Sessions on hold.</b> A planner waits for its subagents in a collapsible tree.</li>
 <li><b>Drive or just watch.</b> Read-only padlock. It never steals input from another client unless you ask.</li>
 <li><b>Create and close sessions</b> with <kbd>⌘N</kbd>.</li>
+<li><b>Your queue in your pocket.</b> Shepherdr Remote, on iPhone, shows the queue and any session's terminal, fitted to the phone, and sends prompts you type or dictate. It reaches your Mac through Tailscale, over TLS, without SSH.</li>
 <li><b>Compass, the page of your day.</b> An agent of its own keeps it, and its buttons start the sessions it suggests once you check them.</li>
 </ul>
 <p>No accounts, no telemetry, no server. Prompts, terminal output and your voice never touch the disk, except the first prompt of a session you start from Compass, which waits until its agent takes it and is then deleted. Only your queue, the repositories your GitHub inbox follows and what you've seen in them, what GitHub said about the PRs, issues and repositories it was asked about, and, per session, its browser tabs and links are remembered; with Compass, also what the queue shows, for its agent. Dictation runs entirely on your Mac.</p>
@@ -359,6 +361,28 @@ herdr machine list --json</code></pre>
 herdr machine add lab --label "Lab" --remote-session agents
 herdr machine list --json</code></pre>
 <p>Also in <i>Settings → Machines</i> (<kbd>⌘,</kbd>), where you can disable them and see failure details. Each profile is one session. Removing a machine only forgets the profile; its sessions keep running. If one fails, you see the last data marked stale.</p>
+</div>
+</section>
+<section id="iphone">
+<div class="es">
+<h2>Shepherdr Remote en el iPhone</h2>
+<p>Una app de iPhone para el Shepherdr de tu Mac: la cola, la terminal de cada sesión de todas tus máquinas y el editor de prompts, con dictado. Solo habla con Shepherdr en tu Mac, que ya llega a tus máquinas, así que no hace falta SSH. Aún no está en la App Store: se compila desde el repositorio con Xcode. Necesita iOS 26 y Tailscale en el móvil y en el Mac.</p>
+<ol>
+<li>En <i>Settings → Remote</i>, activa <b>Let Shepherdr Remote connect</b>. Escucha en el puerto 1337; cámbialo en <b>Port</b> si tu red pide otro.</li>
+<li>Si el firewall del Mac bloquea las conexiones entrantes, como en algunos equipos de empresa, activa <b>Through Tailscale Serve</b>: el relay escucha solo en el Mac y Tailscale le reenvía las conexiones de tu tailnet.</li>
+<li>Pulsa <b>Pair iPhone…</b> y, en el móvil, <b>Scan Pairing Code</b>. El código vale una vez y cinco minutos. También puedes usar <b>Copy Link</b> en el Mac y <b>Paste Pairing Link</b> en el iPhone.</li>
+</ol>
+<p>En el móvil ves la cola en el orden del Mac, con las mismas líneas: una por cada grupo y proyecto, y └ hacia las sesiones que otra espera. El buscador filtra la lista mientras escribes, por nombre, agente, estado o recursos, y <code>@nombre</code> por máquina. Arriba está <b>Compass</b>: la página del día, ajustada al móvil, y la de otros días con el calendario. <b>RUN</b> la actualiza y <b>Agent</b> abre la terminal de su agente; los botones de la página siguen en el Mac. Una sesión muestra un panel cada vez, ajustado a la pantalla, con pestañas si su pestaña de Herdr está dividida. Escribe en la terminal o usa la fila de teclas (Esc, ⇧⏎, flechas, Tab, ^C, 1 2 3, Return). Desliza el dedo arriba y abajo sobre la terminal para recorrer la conversación. <b>≡</b> lista sus recursos (pull requests con sus checks, issues, enlaces, el repositorio) y los abre en Safari. Mientras el móvil muestra un panel lo controla; el Mac lo suelta y <b>RECONNECT</b> lo recupera. El micrófono dicta en el propio iPhone con el reconocimiento de voz de Apple. El Mac tiene que estar despierto y con Shepherdr abierto.</p>
+</div>
+<div class="en">
+<h2>Shepherdr Remote on iPhone</h2>
+<p>An iPhone app for your Mac's Shepherdr: the queue, the terminal of every session on all your machines and the prompt composer, with dictation. It talks only to Shepherdr on your Mac, which already reaches your machines, so there's no SSH involved. It's not on the App Store yet: build it from the repository with Xcode. It needs iOS 26 and Tailscale on the phone and on the Mac.</p>
+<ol>
+<li>In <i>Settings → Remote</i>, turn on <b>Let Shepherdr Remote connect</b>. It listens on port 1337; change it in <b>Port</b> if your network asks for another.</li>
+<li>If the Mac's firewall blocks incoming connections, as some company Macs do, turn on <b>Through Tailscale Serve</b>: the relay listens on the Mac only and Tailscale forwards your tailnet's connections to it.</li>
+<li>Click <b>Pair iPhone…</b> and, on the phone, tap <b>Scan Pairing Code</b>. The code works once, for five minutes. You can also click <b>Copy Link</b> on the Mac and tap <b>Paste Pairing Link</b> on the iPhone.</li>
+</ol>
+<p>The phone shows the queue in the Mac's order, with the same lines: one down each group and project, and └ to the sessions another waits for. Search narrows the list as you type, by name, agent, state or resources, and <code>@name</code> by machine. <b>Compass</b> sits at the top: today's page, fitted to the phone, and other days' from the calendar. <b>RUN</b> updates it and <b>Agent</b> opens its agent's terminal; the page's buttons stay on the Mac. A session shows one pane at a time, fitted to the screen, with tabs when its Herdr tab is split. Type into the terminal or use the keys row (Esc, ⇧⏎, arrows, Tab, ^C, 1 2 3, Return). Swipe up and down on the terminal to scroll back through the conversation. <b>≡</b> lists its resources (pull requests with their checks, issues, links, the repository) and opens them in Safari. While the phone shows a pane it drives it; the Mac lets go and <b>RECONNECT</b> takes it back. The microphone dictates on the iPhone itself, with Apple's speech recognition. The Mac has to be awake, with Shepherdr open.</p>
 </div>
 </section>
 <section id="compass">

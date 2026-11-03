@@ -1,0 +1,472 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0CFC5284B0E7B13597B06E7B /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEE76D18EE52DD8CED7D051 /* Dictation.swift */; };
+		15A73DF561058625AD70AB96 /* TerminalPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD75E8BCB752AC28E203EF1 /* TerminalPanel.swift */; };
+		34CB873329CB942628CE803A /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B4391852A14490D136AD30 /* Theme.swift */; };
+		4CCBCB516608D7D330D6B11A /* PairedMac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E832F1188A3DD0E9621F095 /* PairedMac.swift */; };
+		5B2682798AFBCC4E60890764 /* PairView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F161F3D6A81C80B617478E /* PairView.swift */; };
+		604CE6146B19E9C2125949C4 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = DF18121A876F2128C0F63B20 /* Fonts */; };
+		7305D2CE2B358D052075FCB5 /* ShepherdrRemote in Frameworks */ = {isa = PBXBuildFile; productRef = E56540C032BA41552F95C7EC /* ShepherdrRemote */; };
+		7EA8BD5E4A0887E15FB3E109 /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA512C765DA756FBB442810 /* QueueView.swift */; };
+		96C4A2DCC1FD1A555829D327 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = CDA35E74A2121E8C4626E423 /* SwiftTerm */; };
+		99D3E769384DB9D9ACB6045F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 19893BC369783677E607A44E /* Assets.xcassets */; };
+		B373CCE03EEF5A50240FBAA4 /* SessionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07EE6BE8047C0180B534C6EB /* SessionScreen.swift */; };
+		C48CB27D38E2CC190C6EE471 /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04FBD67D8928CEAEA1DDDFF /* RelayClient.swift */; };
+		D1ABA342AAB3863CC0362F7E /* CompassScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C48121ECDC8D10BCA197301 /* CompassScreen.swift */; };
+		DE26B5AFD12F4C21F767E34D /* ShepherdrRemoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B46AE08702FCCEE9490FAACA /* ShepherdrRemoteApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		07EE6BE8047C0180B534C6EB /* SessionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionScreen.swift; sourceTree = "<group>"; };
+		0DD75E8BCB752AC28E203EF1 /* TerminalPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPanel.swift; sourceTree = "<group>"; };
+		0E832F1188A3DD0E9621F095 /* PairedMac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedMac.swift; sourceTree = "<group>"; };
+		19893BC369783677E607A44E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6C48121ECDC8D10BCA197301 /* CompassScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassScreen.swift; sourceTree = "<group>"; };
+		6DD9B0C6696CD81F99947973 /* ShepherdrRemote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ShepherdrRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6EA512C765DA756FBB442810 /* QueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueView.swift; sourceTree = "<group>"; };
+		81F161F3D6A81C80B617478E /* PairView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairView.swift; sourceTree = "<group>"; };
+		8AEE76D18EE52DD8CED7D051 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
+		93F2E609D661D535CDE96B2C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B46AE08702FCCEE9490FAACA /* ShepherdrRemoteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShepherdrRemoteApp.swift; sourceTree = "<group>"; };
+		B5781F16CAD8250B1E89775C /* remote */ = {isa = PBXFileReference; lastKnownFileType = folder; name = remote; path = ..; sourceTree = SOURCE_ROOT; };
+		C5B4391852A14490D136AD30 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		D04FBD67D8928CEAEA1DDDFF /* RelayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayClient.swift; sourceTree = "<group>"; };
+		D12EE76B6AB78E6A9FCEB250 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		DF18121A876F2128C0F63B20 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = ../Sources/ShepherdrTerminalUI/Resources/Fonts; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E3BFC51B7D5E13D6CA242F51 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7305D2CE2B358D052075FCB5 /* ShepherdrRemote in Frameworks */,
+				96C4A2DCC1FD1A555829D327 /* SwiftTerm in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		019607393B721EC91D55603D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6DD9B0C6696CD81F99947973 /* ShepherdrRemote.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		60CD2067CDD40AAF6734E3EE /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				DF18121A876F2128C0F63B20 /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		69FF7BF089D2AF51B7E8FBD0 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				B5781F16CAD8250B1E89775C /* remote */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		6E16290DDE02DFD8D810D1FF /* ShepherdrTerminalUI */ = {
+			isa = PBXGroup;
+			children = (
+				60CD2067CDD40AAF6734E3EE /* Resources */,
+			);
+			path = ShepherdrTerminalUI;
+			sourceTree = "<group>";
+		};
+		6FDD4C8A0AEB69696B8DF828 /* remote */ = {
+			isa = PBXGroup;
+			children = (
+				A7DDF4BE98DB10E80CD87348 /* Sources */,
+			);
+			name = remote;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		75EB1388AD888E217848AA3C /* ShepherdrRemote */ = {
+			isa = PBXGroup;
+			children = (
+				19893BC369783677E607A44E /* Assets.xcassets */,
+				6C48121ECDC8D10BCA197301 /* CompassScreen.swift */,
+				8AEE76D18EE52DD8CED7D051 /* Dictation.swift */,
+				93F2E609D661D535CDE96B2C /* Info.plist */,
+				0E832F1188A3DD0E9621F095 /* PairedMac.swift */,
+				81F161F3D6A81C80B617478E /* PairView.swift */,
+				6EA512C765DA756FBB442810 /* QueueView.swift */,
+				D04FBD67D8928CEAEA1DDDFF /* RelayClient.swift */,
+				07EE6BE8047C0180B534C6EB /* SessionScreen.swift */,
+				B46AE08702FCCEE9490FAACA /* ShepherdrRemoteApp.swift */,
+				0DD75E8BCB752AC28E203EF1 /* TerminalPanel.swift */,
+				C5B4391852A14490D136AD30 /* Theme.swift */,
+			);
+			path = ShepherdrRemote;
+			sourceTree = "<group>";
+		};
+		989F64CD90041CB9A3E832D6 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				D12EE76B6AB78E6A9FCEB250 /* Base.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		A7DDF4BE98DB10E80CD87348 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				6E16290DDE02DFD8D810D1FF /* ShepherdrTerminalUI */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		F1AAF5B7E97E32DCFEE9EC81 = {
+			isa = PBXGroup;
+			children = (
+				989F64CD90041CB9A3E832D6 /* Config */,
+				69FF7BF089D2AF51B7E8FBD0 /* Packages */,
+				6FDD4C8A0AEB69696B8DF828 /* remote */,
+				75EB1388AD888E217848AA3C /* ShepherdrRemote */,
+				019607393B721EC91D55603D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BDC60A2778C53AA6FBAE8F51 /* ShepherdrRemote */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 010A47293F4CC66DDAD35EEA /* Build configuration list for PBXNativeTarget "ShepherdrRemote" */;
+			buildPhases = (
+				5ABB64017C959D25FDE78629 /* Sources */,
+				AEBDF318992E3F2BAF59EACB /* Resources */,
+				E3BFC51B7D5E13D6CA242F51 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShepherdrRemote;
+			packageProductDependencies = (
+				E56540C032BA41552F95C7EC /* ShepherdrRemote */,
+				CDA35E74A2121E8C4626E423 /* SwiftTerm */,
+			);
+			productName = ShepherdrRemote;
+			productReference = 6DD9B0C6696CD81F99947973 /* ShepherdrRemote.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E65E8DF49AB45FEC040C56CF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					BDC60A2778C53AA6FBAE8F51 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 37953EF68B6331C4029A8907 /* Build configuration list for PBXProject "ShepherdrRemote" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F1AAF5B7E97E32DCFEE9EC81;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7338B7C99F79AFECB43738AB /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				0D0EA91A61E0FEAD7D03B289 /* XCLocalSwiftPackageReference ".." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 019607393B721EC91D55603D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BDC60A2778C53AA6FBAE8F51 /* ShepherdrRemote */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AEBDF318992E3F2BAF59EACB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				99D3E769384DB9D9ACB6045F /* Assets.xcassets in Resources */,
+				604CE6146B19E9C2125949C4 /* Fonts in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5ABB64017C959D25FDE78629 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D1ABA342AAB3863CC0362F7E /* CompassScreen.swift in Sources */,
+				0CFC5284B0E7B13597B06E7B /* Dictation.swift in Sources */,
+				5B2682798AFBCC4E60890764 /* PairView.swift in Sources */,
+				4CCBCB516608D7D330D6B11A /* PairedMac.swift in Sources */,
+				7EA8BD5E4A0887E15FB3E109 /* QueueView.swift in Sources */,
+				C48CB27D38E2CC190C6EE471 /* RelayClient.swift in Sources */,
+				B373CCE03EEF5A50240FBAA4 /* SessionScreen.swift in Sources */,
+				DE26B5AFD12F4C21F767E34D /* ShepherdrRemoteApp.swift in Sources */,
+				15A73DF561058625AD70AB96 /* TerminalPanel.swift in Sources */,
+				34CB873329CB942628CE803A /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1E000A85623F2F092FEA3033 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShepherdrRemote/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Shepherdr;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Shepherdr Remote scans the pairing code your Mac shows.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Shepherdr Remote connects to the Shepherdr relay on your Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Shepherdr Remote listens while you dictate a prompt.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your iPhone turns what you dictate into a prompt, on the device.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.theagilemonkeys.ShepherdrRemote$(BUNDLE_ID_SUFFIX)";
+				PRODUCT_NAME = "Shepherdr Remote";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		CA3B25A584134B11DF7421FA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShepherdrRemote/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Shepherdr;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Shepherdr Remote scans the pairing code your Mac shows.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Shepherdr Remote connects to the Shepherdr relay on your Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Shepherdr Remote listens while you dictate a prompt.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your iPhone turns what you dictate into a prompt, on the device.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.theagilemonkeys.ShepherdrRemote$(BUNDLE_ID_SUFFIX)";
+				PRODUCT_NAME = "Shepherdr Remote";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		DE59B0DCA7C1802989303645 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D12EE76B6AB78E6A9FCEB250 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		FD98C44C17679A815AE2EDC2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D12EE76B6AB78E6A9FCEB250 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		010A47293F4CC66DDAD35EEA /* Build configuration list for PBXNativeTarget "ShepherdrRemote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA3B25A584134B11DF7421FA /* Debug */,
+				1E000A85623F2F092FEA3033 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		37953EF68B6331C4029A8907 /* Build configuration list for PBXProject "ShepherdrRemote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD98C44C17679A815AE2EDC2 /* Debug */,
+				DE59B0DCA7C1802989303645 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0D0EA91A61E0FEAD7D03B289 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		7338B7C99F79AFECB43738AB /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CDA35E74A2121E8C4626E423 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7338B7C99F79AFECB43738AB /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
+		E56540C032BA41552F95C7EC /* ShepherdrRemote */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ShepherdrRemote;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = E65E8DF49AB45FEC040C56CF /* Project object */;
+}

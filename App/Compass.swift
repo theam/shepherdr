@@ -388,6 +388,43 @@ final class CompassController {
         return isTyping ? .waitingForYou : .waitingForAgent
     }
 
+    /// What the agent is doing about the open run, or how the last one went, in words: the
+    /// column's status line, and the phone's.
+    var activitySummary: String {
+        switch activity {
+        case .needsYou: return "! needs you in its terminal"
+        case .running(let since): return "● running since \(Compass.time(since, calendar: calendar))"
+        case .waitingForYou: return "○ the run waits until you stop typing"
+        case .waitingForAgent: return agentID == nil ? "○ starting the agent…" : "○ the run waits for the agent"
+        case .waitingForMac(let blocker): return "○ the run waits for \(blocker.summary)"
+        case .idle:
+            guard let run = lastFinished, let finished = run.finished else { return "no runs yet" }
+            let time = Compass.time(finished, calendar: calendar)
+            let day = Compass.day(finished, calendar: calendar) == today ? "" : " · \(Self.shortDay(run.day, calendar))"
+            return run.outcome == .updated ? "✓ updated \(time)\(day)" : "✓ checked \(time)\(day) · no changes"
+        }
+    }
+
+    /// When the next run is, in words.
+    var nextSummary: String {
+        if !config.enabled { return "schedule paused" }
+        if config.schedule.kind == .manual { return "runs when you ask" }
+        guard let next = nextRun else { return config.schedule.summary }
+        let day = Compass.day(next, calendar: calendar) == today ? "" : "\(Self.shortDay(Compass.day(next, calendar: calendar), calendar)) "
+        return "next run \(day)\(Compass.time(next, calendar: calendar))"
+    }
+
+    /// `Thu 15 Oct`.
+    static func shortDay(_ day: String, _ calendar: Calendar) -> String {
+        guard let date = Compass.date(ofDay: day, calendar: calendar) else { return day }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "EEE d MMM"
+        return formatter.string(from: date)
+    }
+
     /// Sends the open run's prompt once the agent is free, starting the agent first if needed.
     private func deliver() {
         // Only Herdr's answer tells whether the agent is there: wait for this Mac's first one.
@@ -585,16 +622,8 @@ final class CompassController {
             MachineList.name(of: model.machine(for: Agent.ID(machineID: id, terminalID: "")), among: catalog, macName: macName)
         }
         func link(_ resource: SessionResource) -> CompassSessions.Link {
-            let checks = model.checksMonitor.checks[resource.key]
-            let state: String? = if let checks { checks.isMerged ? "merged" : checks.isOpen ? "open" : "closed" }
-                else { model.checksMonitor.issues[resource.key].map { $0.isOpen ? "open" : "closed" } }
-            let result: String? = switch checks?.state {
-            case .passed: "passed"
-            case .failed: "failed"
-            case .running: "running"
-            case .some(.none), nil: nil
-            }
-            return .init(url: resource.url.absoluteString, title: resource.title, checks: result, state: state)
+            let status = model.status(of: resource)
+            return .init(url: resource.url.absoluteString, title: resource.title, checks: status.checks, state: status.state)
         }
         let sessions = model.rankedRows.map { row in
             CompassSessions.Session(

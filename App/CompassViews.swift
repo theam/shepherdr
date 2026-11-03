@@ -132,38 +132,16 @@ struct CompassSidebar: View {
         }
     }
 
-    @ViewBuilder private var activityLine: some View {
-        switch compass.activity {
-        case .needsYou:
-            Text("! needs you in its terminal").foregroundStyle(Theme.amber)
-        case .running(let since):
-            Text("● running since \(Compass.time(since, calendar: compass.calendar))").foregroundStyle(Theme.cyan)
-        case .waitingForYou:
-            Text("○ the run waits until you stop typing").foregroundStyle(Theme.cyan)
-        case .waitingForAgent:
-            Text(compass.agentID == nil ? "○ starting the agent…" : "○ the run waits for the agent").foregroundStyle(Theme.cyan)
-        case .waitingForMac(let blocker):
-            Text("○ the run waits for \(blocker.summary)").foregroundStyle(Theme.cyan)
-        case .idle:
-            if let run = compass.lastFinished, let finished = run.finished {
-                let time = Compass.time(finished, calendar: compass.calendar)
-                let day = Compass.day(finished, calendar: compass.calendar) == compass.today ? "" : " · \(Self.shortDay(run.day, compass.calendar))"
-                Text(run.outcome == .updated ? "✓ updated \(time)\(day)" : "✓ checked \(time)\(day) · no changes")
-                    .foregroundStyle(Theme.phosphor)
-            } else {
-                Text("no runs yet").foregroundStyle(Theme.dim)
-            }
+    private var activityLine: some View {
+        let color: Color = switch compass.activity {
+        case .needsYou: Theme.amber
+        case .idle: compass.lastFinished?.finished == nil ? Theme.dim : Theme.phosphor
+        case .running, .waitingForYou, .waitingForAgent, .waitingForMac: Theme.cyan
         }
+        return Text(compass.activitySummary).foregroundStyle(color)
     }
 
-    private var nextLine: String {
-        if !compass.config.enabled { return "schedule paused" }
-        if compass.config.schedule.kind == .manual { return "runs when you ask" }
-        guard let next = compass.nextRun else { return compass.config.schedule.summary }
-        let calendar = compass.calendar
-        let day = Compass.day(next, calendar: calendar) == compass.today ? "" : "\(Self.shortDay(Compass.day(next, calendar: calendar), calendar)) "
-        return "next run \(day)\(Compass.time(next, calendar: calendar))"
-    }
+    private var nextLine: String { compass.nextSummary }
 
     @ViewBuilder private var backupLine: some View {
         switch compass.backup {
@@ -260,15 +238,7 @@ struct CompassSidebar: View {
     }
 
     /// `Thu 15 Oct`.
-    static func shortDay(_ day: String, _ calendar: Calendar) -> String {
-        guard let date = Compass.date(ofDay: day, calendar: calendar) else { return day }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "EEE d MMM"
-        return formatter.string(from: date)
-    }
+    static func shortDay(_ day: String, _ calendar: Calendar) -> String { CompassController.shortDay(day, calendar) }
 
     // MARK: Footer
 

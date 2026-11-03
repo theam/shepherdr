@@ -17,6 +17,8 @@ struct SettingsView: View {
                 .tabItem { Label("Agents", systemImage: "envelope") }
             CompassSettings(model: model, compass: model.compass)
                 .tabItem { Label("Compass", systemImage: "safari") }
+            RemoteSettings(relay: model.relay)
+                .tabItem { Label("Remote", systemImage: "iphone") }
         }
         .frame(width: 580, height: 520)
         .preferredColorScheme(.dark)
