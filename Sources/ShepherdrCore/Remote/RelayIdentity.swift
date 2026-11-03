@@ -1,9 +1,12 @@
+import CryptoKit
 import Foundation
 import Security
 import ShepherdrRemote
 
 /// The relay's TLS identity: a P-256 key and a self-signed certificate for it, kept in the keychain
-/// so the fingerprint phones pinned stays the same across launches.
+/// so the fingerprint phones pinned stays the same across launches. The key is found by its tag and
+/// the certificate by the key's hash: macOS labels a certificate with its subject, whatever label it
+/// is added with.
 public struct RelayIdentity: @unchecked Sendable {
     public let identity: SecIdentity
     public let certificate: SecCertificate
@@ -21,7 +24,7 @@ public struct RelayIdentity: @unchecked Sendable {
     /// The identity in the keychain, made the first time.
     /// - Parameter keychain: a keychain of its own for tests; the user's default one otherwise.
     public static func load(keychain: SecKeychain? = nil) throws -> RelayIdentity {
-        if let key = try? findKey(keychain: keychain), let certificate = try? findCertificate(keychain: keychain),
+        if let key = try? findKey(keychain: keychain), let certificate = try? findCertificate(for: key, keychain: keychain),
            let identity = try? makeIdentity(certificate, keychain: keychain), matches(certificate, key) {
             return RelayIdentity(identity: identity, certificate: certificate, fingerprint: try fingerprint(of: certificate))
         }
@@ -31,15 +34,17 @@ public struct RelayIdentity: @unchecked Sendable {
 
     /// Forgets the key and the certificate: the next `load` makes new ones, and paired phones
     /// must pair again.
+    /// Only this copy's own items go: every copy's certificate has the same subject, so it is
+    /// told apart by its key.
     public static func remove(keychain: SecKeychain? = nil) {
-        var key: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: tag]
-        var certificate: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecAttrLabel as String: itemLabel]
-        if let keychain {
-            key[kSecMatchSearchList as String] = [keychain]
-            certificate[kSecMatchSearchList as String] = [keychain]
+        if let key = try? findKey(keychain: keychain), let hash = publicKeyHash(of: key) {
+            var certificate: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecAttrPublicKeyHash as String: hash]
+            if let keychain { certificate[kSecMatchSearchList as String] = [keychain] }
+            SecItemDelete(certificate as CFDictionary)
         }
+        var key: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: tag]
+        if let keychain { key[kSecMatchSearchList as String] = [keychain] }
         SecItemDelete(key as CFDictionary)
-        SecItemDelete(certificate as CFDictionary)
     }
 
     private static func create(keychain: SecKeychain?) throws -> RelayIdentity {
@@ -71,8 +76,7 @@ public struct RelayIdentity: @unchecked Sendable {
         guard let certificate = SecCertificateCreateWithData(nil, der as CFData) else {
             throw RelayIdentityError.keychain("The certificate could not be made.")
         }
-        var add: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecValueRef as String: certificate,
-                                  kSecAttrLabel as String: itemLabel]
+        var add: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecValueRef as String: certificate]
         if let keychain { add[kSecUseKeychain as String] = keychain }
         let status = SecItemAdd(add as CFDictionary, nil)
         guard status == errSecSuccess || status == errSecDuplicateItem else { throw RelayIdentityError.status(status) }
@@ -90,8 +94,9 @@ public struct RelayIdentity: @unchecked Sendable {
         return item as! SecKey
     }
 
-    private static func findCertificate(keychain: SecKeychain?) throws -> SecCertificate {
-        var query: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecAttrLabel as String: itemLabel,
+    private static func findCertificate(for key: SecKey, keychain: SecKeychain?) throws -> SecCertificate {
+        guard let hash = publicKeyHash(of: key) else { throw RelayIdentityError.keychain("The key's public half could not be read.") }
+        var query: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecAttrPublicKeyHash as String: hash,
                                     kSecReturnRef as String: true]
         if let keychain { query[kSecMatchSearchList as String] = [keychain] }
         var item: CFTypeRef?
@@ -100,6 +105,13 @@ public struct RelayIdentity: @unchecked Sendable {
             throw RelayIdentityError.status(status)
         }
         return item as! SecCertificate
+    }
+
+    /// What the keychain files a certificate under (`kSecAttrPublicKeyHash`) and its private key
+    /// under (`kSecAttrApplicationLabel`): the SHA-1 of the public key.
+    static func publicKeyHash(of key: SecKey) -> Data? {
+        guard let publicKey = SecKeyCopyPublicKey(key), let point = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else { return nil }
+        return Data(Insecure.SHA1.hash(data: point))
     }
 
     private static func makeIdentity(_ certificate: SecCertificate, keychain: SecKeychain?) throws -> SecIdentity {
