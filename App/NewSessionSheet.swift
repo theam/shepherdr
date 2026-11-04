@@ -143,8 +143,8 @@ struct NewSessionSheet: View {
     private var subtitle: String {
         if draft.compass != nil { return "asked for by your Compass page" }
         guard case .into(let groupID) = draft.placement,
-              let group = model.groups.first(where: { $0.id == groupID }) else { return "a new herdr workspace with a shell in it" }
-        return "a new herdr workspace with a shell, in \(group.name)"
+              let group = model.groups.first(where: { $0.id == groupID }) else { return "a new session in a folder of your choice" }
+        return "a new session in \(group.name)"
     }
 
     var body: some View {
@@ -191,7 +191,7 @@ struct NewSessionSheet: View {
             if startsAgent {
                 agentFields
             } else {
-                Text("Start an agent in its terminal when you need one; the session joins the queue as soon as Herdr detects it.")
+                Text("Start an agent in it when you're ready; it joins your sessions automatically.")
                     .font(Theme.mono(10)).foregroundStyle(Theme.faint).fixedSize(horizontal: false, vertical: true)
             }
 
@@ -199,8 +199,9 @@ struct NewSessionSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("? \(display(newProject)) doesn't exist \(whereabouts).")
                         .font(Theme.mono(11)).foregroundStyle(Theme.amber)
-                    Text("Start a new project there? Shepherdr makes the folder, runs git init in it and opens the session.")
+                    Text("Start a new project there? Shepherdr makes the folder and opens the session.")
                         .font(Theme.mono(10)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
+                        .help("The folder is also set up as an empty Git repository (git init).")
                 }
             }
 
@@ -216,7 +217,7 @@ struct NewSessionSheet: View {
 
             HStack {
                 if model.isCreatingSession || progress != nil {
-                    Text(progress ?? "creating workspace…").font(Theme.mono(10.5)).foregroundStyle(Theme.phosphor)
+                    Text(progress ?? "creating session…").font(Theme.mono(10.5)).foregroundStyle(Theme.phosphor)
                     BlinkingCursor()
                 }
                 Spacer()
@@ -301,7 +302,7 @@ struct NewSessionSheet: View {
             switch reference {
             case .repository(let repository)?:
                 Text("⇣ \(repository.fullName)").foregroundStyle(Theme.cyan)
-                Text("Opens your clone \(whereabouts), or clones it into \(destination) first.").foregroundStyle(Theme.dim)
+                Text("Opens your copy \(whereabouts), or copies it into \(destination) first.").foregroundStyle(Theme.dim)
             case .pullRequest(let repository, let number)?:
                 let title = pull?.head.map { " · \($0.title)" } ?? ""
                 Text(verbatim: "⇄ \(repository.fullName)#\(number)\(title)").foregroundStyle(Theme.lilac).lineLimit(2)
@@ -315,17 +316,17 @@ struct NewSessionSheet: View {
     }
 
     private func pullDetail(number: Int, destination: String) -> String {
-        guard let pull, pull.isDone else { return "Asking GitHub for its branch…" }
+        guard let pull, pull.isDone else { return "Asking GitHub for the branch…" }
         let branch = PullRequestHead.localBranch(for: number, head: pull.head)
-        let clone = "your clone \(whereabouts), cloned into \(destination) first if needed"
+        let clone = "your copy \(whereabouts), copied into \(destination) first if needed"
         guard let head = pull.head else {
-            return "GitHub didn't say which branch it comes from: its commits go to branch \(branch), in a worktree of \(clone)."
+            return "GitHub didn't say which branch this is. Opens branch \(branch) in \(clone)."
         }
         let state = head.state == "open" ? "" : " It's \(head.state)."
         guard head.isSameRepository else {
-            return "From a fork's \(head.branch): its commits go to branch \(branch), in a worktree of \(clone).\(state)"
+            return "From a fork's \(head.branch). Opens branch \(branch) in \(clone).\(state)"
         }
-        return "Branch \(branch), in a worktree of \(clone).\(state)"
+        return "Opens branch \(branch) in \(clone).\(state)"
     }
 
     /// The worktree option: off by default for a folder or a repository, always on for a pull request.
@@ -347,8 +348,9 @@ struct NewSessionSheet: View {
                 field("Branch") {
                     consoleTextField("fix-login", text: $branch).focused($focus, equals: .branch)
                 }
-                Text("Herdr checks the branch out in a worktree of its own, in its worktrees folder, or opens the one it already has. A new branch starts at the folder's current commit.")
+                Text("Works on its own branch, apart from the folder's checkout.")
                     .font(Theme.mono(10)).foregroundStyle(Theme.faint).fixedSize(horizontal: false, vertical: true)
+                    .help("Herdr checks the branch out in a worktree of its own, or opens the one it already has. A new branch starts at the folder's current commit.")
             }
         }
     }

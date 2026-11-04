@@ -8,13 +8,37 @@ import ShepherdrCore
 struct ResourcesPanel: View {
     let workspace: SessionWorkspace
     let checks: ChecksMonitor
+    /// Hides the panel; the header's resources button brings it back.
+    let close: () -> Void
+    /// Reads the session again: drops what it no longer mentions and updates the rest.
+    let refresh: () async -> Void
     private static let shown = 10
     @ViewState private var expanded = Set<SessionResource.Kind>()
+    @ViewState private var isRefreshing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ConsoleHeader(title: "Resources", trailing: "\(workspace.visibleResources.count)")
-                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
+            HStack(spacing: 8) {
+                ConsoleHeader(title: "Resources", trailing: "\(workspace.visibleResources.count)")
+                Button {
+                    isRefreshing = true
+                    Task { await refresh(); isRefreshing = false }
+                } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.dim)
+                        .frame(width: 14, height: 14).contentShape(Rectangle()).opacity(isRefreshing ? 0.4 : 1)
+                }
+                .buttonStyle(.plain).disabled(isRefreshing)
+                .help("Refresh: drop what the session no longer mentions and update the rest")
+                .accessibilityLabel("Refresh Resources")
+                Button(action: close) {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.dim)
+                        .frame(width: 14, height: 14).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Close Resources")
+                .accessibilityLabel("Close Resources")
+            }
+            .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(SessionResource.Kind.allCases, id: \.self) { kind in
@@ -43,15 +67,15 @@ struct ResourcesPanel: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Theme.panel)
     }
 
     private func row(_ resource: SessionResource) -> some View {
         let isOpen = workspace.browser.isVisible && workspace.browser.selected?.url == resource.url
         return Button { workspace.open(resource) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text(Self.glyph(resource.kind)).font(Theme.mono(10.5, .bold))
-                    .foregroundStyle(tint(of: resource)).frame(width: 12)
+                ResourceIcon(look: ResourceIcon.look(of: resource, outcome: checks.outcome(of: resource),
+                                                     issue: checks.issues[resource.key]))
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 5) {
                         Text(resource.name).font(Theme.mono(11, .medium)).lineLimit(1).truncationMode(.middle)
@@ -90,31 +114,6 @@ struct ResourcesPanel: View {
         lines.append(resource.url.absoluteString)
         lines.append("Mentioned \(resource.mentions)× · opened \(resource.opens)×")
         return lines.joined(separator: "\n")
-    }
-
-    private static func glyph(_ kind: SessionResource.Kind) -> String {
-        switch kind {
-        case .pullRequest: "⇄"
-        case .issue: "◎"
-        case .artifact: "◆"
-        case .link: "↗"
-        }
-    }
-
-    /// Its kind's color while open; lilac once it landed, as GitHub marks merged pull requests and
-    /// completed issues; dimmed once dropped.
-    private func tint(of resource: SessionResource) -> Color {
-        switch checks.outcome(of: resource) {
-        case .landed: Theme.lilac
-        case .dropped: Theme.dim
-        case nil:
-            switch resource.kind {
-            case .pullRequest: Theme.phosphor
-            case .issue: Theme.amber
-            case .artifact: Theme.cyan
-            case .link: Theme.text
-            }
-        }
     }
 
     private func status(of resource: SessionResource) -> String? {

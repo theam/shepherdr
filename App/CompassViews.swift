@@ -8,13 +8,10 @@ struct ModeTabs: View {
     let model: AppModel
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             tab(.compass, "COMPASS", help: "Compass: the page of your day (⌥⌘1)") { compassBadge }
-            Rectangle().fill(Theme.line).frame(width: 1, height: 18)
             tab(.agents, "AGENTS", help: "Agents: your sessions' queue (⌥⌘2)") { agentsBadge }
         }
-        .background(Theme.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 4))
-        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.line, lineWidth: 1))
         .fixedSize()
     }
 
@@ -26,9 +23,10 @@ struct ModeTabs: View {
                 badge()
             }
             .foregroundStyle(selected ? Theme.phosphor : Theme.dim)
-            .padding(.horizontal, 8).frame(height: 20)
-            .background(selected ? Theme.raised : .clear)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 9).frame(height: 22)
+            .background(selected ? Theme.raised : Theme.background, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(selected ? Theme.phosphor.opacity(0.7) : Theme.line, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .help(help)

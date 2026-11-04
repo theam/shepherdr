@@ -84,6 +84,14 @@ public struct SessionResource: Identifiable, Hashable, Codable, Sendable {
         return resource
     }
 
+    /// To be checked again: its title and whether it exists.
+    public func unchecked() -> SessionResource {
+        var resource = self
+        resource.isChecked = false
+        resource.isMissing = false
+        return resource
+    }
+
     /// The page doesn't exist.
     public func missing() -> SessionResource {
         var resource = self

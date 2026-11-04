@@ -20,6 +20,8 @@ struct SessionView: View {
     /// The terminal you work in: the session's own, or the split you last clicked.
     private var terminal: TerminalStore { holder(for: paneID).store }
     @ViewState<Bool> private var showDetails = false
+    /// The model and effort its agent runs with, read from the agent's own files.
+    @ViewState<AgentRunInfo?> private var runInfo: AgentRunInfo? = nil
     @ViewState<CGFloat> private var editorHeight: CGFloat = 60
     @AppStorage("terminalFontSize") private var fontSize = 13.0
     @AppStorage("terminalFontFamily") private var fontFamily = ConsoleFonts.defaultFamily
@@ -54,13 +56,19 @@ struct SessionView: View {
             Rectangle().fill(Theme.line).frame(height: 1)
             if !isCompass { RelationsPanel(id: id, model: model) }
             MailPanel(session: id, model: model)
-            HStack(spacing: 0) {
-                workArea
+            // The content sits in cards on the panel's shade rather than on the bare background.
+            HStack(spacing: 8) {
+                workArea.card()
                 if showsResources && !isCompass && !workspace.visibleResources.isEmpty {
-                    Rectangle().fill(Theme.line).frame(width: 1)
-                    ResourcesPanel(workspace: workspace, checks: model.checksMonitor).frame(width: 230)
+                    ResourcesPanel(workspace: workspace, checks: model.checksMonitor, close: { showsResources = false },
+                                   refresh: { [model, id] in await model.refreshResources(for: id) })
+                        .frame(width: 230)
+                        .card()
                 }
             }
+            .padding(8)
+            .background(Theme.panel)
+            statusBar
         }
         .background(Theme.background)
         .onAppear { model.activeTerminal = terminal }
@@ -77,6 +85,7 @@ struct SessionView: View {
             }
             await model.harvestResources(for: id)
         }
+        .task(id: id) { await followRunInfo() }
     }
 
     private var workArea: some View {
@@ -89,7 +98,6 @@ struct SessionView: View {
                     offline
                 }
                 if workspace.isEditorOpen { editor }
-                bottomBar
             }
         } browser: {
             BrowserPanel(browser: workspace.browser)
@@ -159,7 +167,7 @@ struct SessionView: View {
         if let message = terminal.message {
             banner(message)
         } else if terminal.isControlledElsewhere {
-            banner("Another client is typing in this terminal, so it is locked here.",
+            banner("This session is being typed in from somewhere else, so it's read-only here.",
                    action: ("TAKE OVER", { terminal.takeOver() }))
         }
     }
@@ -173,27 +181,14 @@ struct SessionView: View {
             } else {
                 StateGlyph(status: model.status(for: id) ?? .shell)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(context.target.workspace).font(Theme.mono(14, .bold)).foregroundStyle(Theme.text).lineLimit(1)
-                    Text("›").font(Theme.mono(13)).foregroundStyle(Theme.faint)
-                    Text(context.title).font(Theme.mono(13)).foregroundStyle(Theme.text.opacity(0.75)).lineLimit(1)
-                }
-                HStack(spacing: 6) {
-                    Text(locationLine).font(Theme.mono(10)).foregroundStyle(Theme.faint).lineLimit(1).truncationMode(.middle)
-                    Text("·").font(Theme.mono(10)).foregroundStyle(Theme.faint)
-                    PaneIDButton(paneID: context.paneID, workspace: context.target.workspace, machine: context.machine.machine)
-                        .layoutPriority(1)
-                }
+            HStack(spacing: 8) {
+                Text(context.target.workspace).font(Theme.mono(14, .bold)).foregroundStyle(Theme.text)
+                    .lineLimit(1).layoutPriority(1)
+                Text("›").font(Theme.mono(13)).foregroundStyle(Theme.faint)
+                Text(context.title).font(Theme.mono(13)).foregroundStyle(Theme.text.opacity(0.75)).lineLimit(1)
             }
             Spacer(minLength: 8)
             if let agent = context.agent {
-                let background = model.backgroundCommands(of: agent)
-                if !background.isEmpty {
-                    BackgroundLabel(commands: background)
-                        .font(Theme.mono(10)).foregroundStyle(Theme.dim).frame(maxWidth: 220, alignment: .trailing)
-                }
-                AgentMark(program: agent.agent.program, style: .tag)
                 StateTag(status: model.status(of: agent))
             }
             Button { model.showFolder(of: id) } label: { Image(systemName: "folder").font(.system(size: 10.5, weight: .semibold)) }
@@ -202,22 +197,84 @@ struct SessionView: View {
                 .help(model.folderHelp(for: id))
                 .accessibilityLabel("Show the session's folder in Finder")
             lockButton
-            Button { showDetails.toggle() } label: { Text("i") }
-                .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
-                .help("Session details")
-                .popover(isPresented: $showDetails, arrowEdge: .bottom) {
-                    SessionDetails(context: context, cluster: model.cluster).frame(width: 320)
-                }
+            divider
+            if !isCompass {
+                tools
+                divider
+            }
+            detailsButton
         }
-        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Theme.panel)
     }
 
-    private var locationLine: String {
-        let machine = context.machine.machine
-        let place = machine.isLocal ? "local" : "\(machine.name) (\(machine.target ?? "ssh"))"
-        let directory = context.agent?.project ?? ""
-        return [place, "session \(machine.session)", directory].filter { !$0.isEmpty }.joined(separator: " · ")
+    private var divider: some View {
+        Rectangle().fill(Theme.line).frame(width: 1, height: 16)
+    }
+
+    private var detailsButton: some View {
+        Button { showDetails.toggle() } label: { iconLabel("info.circle") }
+            .buttonStyle(ConsoleButtonStyle(tint: showDetails ? Theme.phosphor : Theme.dim))
+            .help("Session details")
+            .accessibilityLabel("Session details")
+            .popover(isPresented: $showDetails, arrowEdge: .bottom) {
+                SessionDetails(context: context, cluster: model.cluster,
+                               checkout: context.agent.flatMap {
+                                   model.cluster.checkout(machineID: $0.id.machineID, workspaceID: $0.agent.workspaceID)
+                               },
+                               background: context.agent.map { model.backgroundCommands(of: $0) } ?? [])
+                    .frame(width: 320)
+            }
+    }
+
+    // MARK: Session tools
+
+    /// The session's resources and its browser, as icons.
+    private var tools: some View {
+        HStack(spacing: 4) {
+            resourcesButton
+            browserButton
+        }
+    }
+
+    private func iconLabel(_ symbol: String) -> some View {
+        Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).frame(width: 16, height: 14)
+    }
+
+    private var promptButton: some View {
+        let hasDraft = !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return Button { model.togglePromptEditor() } label: { iconLabel("square.and.pencil") }
+            .buttonStyle(ConsoleButtonStyle(tint: workspace.isEditorOpen ? Theme.phosphor : Theme.dim))
+            .overlay(alignment: .topTrailing) {
+                // A draft waits in the closed editor.
+                if hasDraft && !workspace.isEditorOpen {
+                    Circle().fill(Theme.phosphor).frame(width: 6, height: 6).offset(x: 2, y: -2)
+                }
+            }
+            .help(hasDraft && !workspace.isEditorOpen ? "Prompt editor, with a draft waiting (⌘L)" : "Prompt editor (⌘L)")
+            .accessibilityLabel(hasDraft && !workspace.isEditorOpen ? "Prompt editor, draft waiting" : "Prompt editor")
+    }
+
+    private var resourcesButton: some View {
+        let links = workspace.visibleResources.count
+        return Button { showsResources.toggle() } label: {
+            HStack(spacing: 4) {
+                iconLabel("list.bullet.rectangle")
+                if links > 0 { Text("\(links)").font(Theme.mono(10, .semibold)) }
+            }
+        }
+        .buttonStyle(ConsoleButtonStyle(tint: showsResources && links > 0 ? Theme.phosphor : Theme.dim))
+        .disabled(links == 0)
+        .help(links > 0 ? "Pull requests, issues and Claude artifacts this session linked to"
+                        : "Pull requests, issues and Claude artifacts this session links to will gather here")
+        .accessibilityLabel(links > 0 ? "Resources, \(links)" : "Resources")
+    }
+
+    private var browserButton: some View {
+        Button { model.toggleBrowser() } label: { iconLabel("globe") }
+            .buttonStyle(ConsoleButtonStyle(tint: workspace.browser.isVisible ? Theme.phosphor : Theme.dim))
+            .help("This session's browser (⌘B). Its tabs stay open while you work elsewhere.")
+            .accessibilityLabel("Browser")
     }
 
     /// Open lock: keyboard, paste and prompts go to the session. Closed lock: read-only.
@@ -234,6 +291,100 @@ struct SessionView: View {
         .help(locked ? "Locked: read-only. Click to unlock and type here (⌘E)"
                      : "Unlocked: typing and prompts go to this session. Click to lock it read-only (⌘E)")
         .accessibilityLabel(locked ? "Unlock session" : "Lock session")
+    }
+
+    // MARK: Status bar
+
+    /// Under the whole work area, whatever is beside the terminal: the prompt editor and dictation on the left, followed by
+    /// where we are (agent, model, effort); the subscription's consumption on the right.
+    private var statusBar: some View {
+        HStack(spacing: 10) {
+            promptButton
+            DictationButton(model: model, id: id, compact: true)
+            place.padding(.leading, 6)
+            Spacer(minLength: 8)
+            if let usage = subscriptionUsage { subscription(usage) }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 5)
+        .background(Theme.panel)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+    }
+
+    /// The Claude subscription's limits, each with two thin lines: what is used, and how much of the
+    /// window has passed. The used line running ahead of the time line means burning faster than time.
+    private func subscription(_ usage: SubscriptionUsage) -> some View {
+        HStack(spacing: 14) {
+            if let window = usage.session { limit("5h", window, length: SubscriptionUsage.sessionLength) }
+            if let window = usage.week { limit("week", window, length: SubscriptionUsage.weekLength) }
+        }
+        .font(Theme.mono(10.5))
+        .padding(.trailing, 6)
+    }
+
+    private func limit(_ name: String, _ window: SubscriptionUsage.Window, length: TimeInterval) -> some View {
+        let tint: Color = window.percent >= 95 ? Theme.red : window.percent >= 80 ? Theme.amber : Theme.phosphor
+        let exact = window.resetsAt.map { "Starts again " + $0.formatted(date: .abbreviated, time: .shortened) } ?? "No reset time reported"
+        return TimelineView(.everyMinute) { context in
+            let passed = window.elapsed(of: length, now: context.date)
+            HStack(spacing: 6) {
+                Text(name).foregroundStyle(Theme.faint)
+                VStack(spacing: 2) {
+                    UsageLine(fraction: window.utilization / 100, tint: tint)
+                    UsageLine(fraction: passed ?? 0, tint: Theme.cyan.opacity(0.7)).opacity(passed == nil ? 0.3 : 1)
+                }
+                .frame(width: 64)
+                Text("\(window.percent)%").foregroundStyle(tint).fontWeight(.semibold)
+                if let reset = window.resetsAt {
+                    Text(SubscriptionUsage.untilReset(reset, now: context.date)).foregroundStyle(Theme.faint)
+                }
+            }
+        }
+        .help("Claude subscription, \(name == "5h" ? "five-hour" : "weekly") limit: \(window.percent)% used"
+              + (window.elapsed(of: length).map { ", \(Int(($0 * 100).rounded()))% of the time gone" } ?? "") + ". \(exact).")
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The subscription of the session's agent, when this Mac knows its usage.
+    private var subscriptionUsage: SubscriptionUsage? {
+        switch context.agent?.agent.program.label {
+        case "claude": model.subscriptions.claude
+        case "codex": model.subscriptions.codex
+        default: nil
+        }
+    }
+
+    /// Reads the agent's model and effort again every few seconds: `/model` changes them mid-session.
+    /// Only sessions on this Mac have their files here.
+    private func followRunInfo() async {
+        guard context.machine.machine.isLocal, let agent = context.agent?.agent, let directory = agent.directory,
+              ["claude", "codex"].contains(agent.program.label) else { runInfo = nil; return }
+        let isClaude = agent.program.label == "claude"
+        while !Task.isCancelled {
+            let info = await Task.detached {
+                isClaude ? AgentTranscripts().claude(directory: directory) : AgentTranscripts().codex(directory: directory)
+            }.value
+            if info != runInfo { runInfo = info }
+            try? await Task.sleep(for: .seconds(5))
+        }
+    }
+
+    /// The agent the session runs with its model and effort, or Terminal when it is a plain shell.
+    private var place: some View {
+        HStack(spacing: 6) {
+            if let program = context.agent?.agent.program {
+                AgentMark(program: program, style: .glyph)
+                Text(program.name)
+                if let model = runInfo?.modelTitle { Text("·").foregroundStyle(Theme.faint); Text(model).foregroundStyle(Theme.text.opacity(0.85)) }
+                if let effort = runInfo?.effort { Text("·").foregroundStyle(Theme.faint); Text(effort).foregroundStyle(Theme.phosphor) }
+            } else {
+                Text("$").foregroundStyle(Theme.phosphor)
+                Text("Terminal")
+            }
+        }
+        .font(Theme.mono(10.5)).foregroundStyle(Theme.dim)
+        .help(runInfo.map { "Model: \($0.model ?? "unknown"). Effort: \($0.effort ?? "unknown"). Read from this session's own files." }
+              ?? "Where this session runs")
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: Banners and states
@@ -257,7 +408,7 @@ struct SessionView: View {
             } else if let action {
                 Button(action.0, action: action.1).buttonStyle(ConsoleButtonStyle(tint: Theme.amber))
                     .disabled(terminal.status == .connecting)
-                    .help("Detach the other client's input and control this terminal from Shepherdr")
+                    .help("Stop the other input and control this session from here")
             } else if terminal.status == .failed || terminal.status == .ended || reconnection != nil {
                 Button("RECONNECT") { terminal.open() }.buttonStyle(ConsoleButtonStyle(tint: Theme.amber))
                     .disabled(reconnection?.gaveUp == false)
@@ -279,10 +430,10 @@ struct SessionView: View {
 
     private var offline: some View {
         VStack(spacing: 10) {
-            Text("[ \(context.machine.connection.title.uppercased()) ]").font(Theme.mono(13, .bold)).foregroundStyle(Theme.amber)
+            Text(context.machine.connection.title).font(Theme.mono(13, .semibold)).foregroundStyle(Theme.amber)
             Text(context.machine.failure?.message ?? "This machine is not reachable right now.")
                 .font(Theme.mono(11)).foregroundStyle(Theme.dim).multilineTextAlignment(.center)
-            if context.isStale { Text("showing last known state").font(Theme.mono(10)).foregroundStyle(Theme.faint) }
+            if context.isStale { Text("Showing the last known state").font(Theme.mono(10)).foregroundStyle(Theme.faint) }
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -294,7 +445,7 @@ struct SessionView: View {
         Binding { model.drafts[id] ?? "" } set: { model.drafts[id] = $0 }
     }
 
-    /// The optional editor for long prompts, opened from the bottom bar or with ⌘L.
+    /// The optional editor for long prompts, opened from the header or with ⌘L.
     private var editor: some View {
         HStack(alignment: .top, spacing: 8) {
             Text("›").font(Theme.mono(15, .bold))
@@ -328,84 +479,13 @@ struct SessionView: View {
         .overlay(alignment: .top) { Rectangle().fill(Theme.phosphor.opacity(0.35)).frame(height: 1) }
     }
 
-    /// Always-visible controls: the prompt editor, dictation, quick keys and this session's browser.
-    /// As the column narrows (a small window, the browser open) the hint goes first, then the labels fall back to icons.
-    private var bottomBar: some View {
-        ViewThatFits(in: .horizontal) {
-            barContent(compact: false, hint: true)
-            barContent(compact: false, hint: false)
-            barContent(compact: true, hint: false)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.panel)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-    }
-
-    private func barContent(compact: Bool, hint: Bool) -> some View {
-        HStack(spacing: 6) {
-            let hasDraft = !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let prompt = compact ? "✎" : "✎ PROMPT"
-            barToggle(hasDraft && !workspace.isEditorOpen ? "\(prompt) •" : prompt, active: workspace.isEditorOpen,
-                      help: "Prompt editor for long prompts (⌘L)") { model.togglePromptEditor() }
-            DictationButton(model: model, id: id, compact: compact)
-            Rectangle().fill(Theme.line).frame(width: 1, height: 16).padding(.horizontal, compact ? 1 : 4)
-            key("esc", .escape, help: "Escape — interrupts most agents (⌘⎋)")
-            key("^C", .interrupt, help: "Control-C")
-            key("tab", .tab, help: "Tab")
-            key("↑", .up, help: "Up arrow")
-            key("↓", .down, help: "Down arrow")
-            key("⏎", .enter, help: "Return")
-            Spacer(minLength: 8)
-            if hint {
-                Text(isLive ? "⇧⏎ new line · click a link to browse · ⌘-click opens your browser" : "locked · read-only · ⌘E to unlock")
-                    .font(Theme.mono(9.5)).foregroundStyle(Theme.faint).lineLimit(1).truncationMode(.head)
-                    .layoutPriority(-1)
-            }
-            if !isCompass { panelToggles(compact: compact) }
-        }
-    }
-
-    @ViewBuilder private func panelToggles(compact: Bool) -> some View {
-        HStack(spacing: 6) {
-            let links = workspace.visibleResources.count
-            barToggle(compact ? (links > 0 ? "≡ \(links)" : "≡") : (links > 0 ? "≡ RESOURCES \(links)" : "≡ RESOURCES"),
-                      active: showsResources && links > 0,
-                      help: links > 0 ? "Pull requests, issues and Claude artifacts this session linked to"
-                                      : "Pull requests, issues and Claude artifacts this session links to gather here") {
-                showsResources.toggle()
-            }
-            .disabled(links == 0)
-            let tabs = workspace.browser.tabs.count
-            barToggle(compact ? (tabs > 0 ? "◫ \(tabs)" : "◫") : (tabs > 0 ? "◫ BROWSER \(tabs)" : "◫ BROWSER"),
-                      active: workspace.browser.isVisible,
-                      help: "This session's browser (⌘B). Its tabs stay open while you work elsewhere.") {
-                model.toggleBrowser()
-            }
-        }
-    }
-
-    private func barToggle(_ title: String, active: Bool, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).lineLimit(1) }
-            .buttonStyle(ConsoleButtonStyle(tint: active ? Theme.phosphor : Theme.dim, prominent: active))
-            .fixedSize()
-            .help(help)
-    }
-
     private var placeholder: String {
         switch terminal.status {
-        case .interactive: "next prompt for \(context.target.workspace)…"
-        case .connecting: "connecting…"
-        default: terminal.isControlledElsewhere ? "another client has input — take over to send" : "locked — draft here, unlock to send"
+        case .interactive: "Message \(context.target.workspace)…"
+        case .connecting: "Connecting…"
+        default: terminal.isControlledElsewhere ? "Typed in elsewhere. Take over to send."
+                                                 : "Read-only. Write a draft here and unlock to send."
         }
-    }
-
-    private func key(_ label: String, _ key: TerminalKey, help: String) -> some View {
-        Button { terminal.press(key) } label: { Text(label) }
-            .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
-            .fixedSize()
-            .disabled(!isLive)
-            .help(help)
     }
 
     private func submit() {
@@ -418,31 +498,56 @@ struct SessionView: View {
     }
 }
 
-/// Herdr metadata for the selected session.
-private struct SessionDetails: View {
+/// The selected session in plain terms first, then the Herdr details behind it.
+struct SessionDetails: View {
     let context: SessionContext
     let cluster: ClusterStore
+    /// Its repository checkout, when it has one.
+    let checkout: WorkspaceCheckout?
+    /// What its agent left running.
+    let background: [BackgroundCommand]
 
     var body: some View {
+        let machine = context.machine.machine
         VStack(alignment: .leading, spacing: 12) {
             ConsoleHeader(title: "Session")
             if let row = context.agent {
-                field("Agent", "\(row.agent.program.name) · \(row.agent.program.label)")
+                field("Agent", row.agent.program.name)
                 field("State", row.agent.state == .unknown ? "Unknown (\(row.agent.reportedState))" : row.agent.state.title)
+            }
+            field("Machine", machine.isLocal ? "This Mac" : machine.name)
+            if let row = context.agent {
+                field("Folder", row.agent.directory ?? row.agent.project ?? "Not reported")
+            }
+            if let branch = checkout?.branch {
+                field("Branch", branch + (checkout?.isLinkedWorktree == true ? " (worktree)" : ""))
+            }
+            if !background.isEmpty {
+                field("Still running", background
+                    .map { "\($0.command) (\(BackgroundLabel.duration(Int(-$0.started.timeIntervalSinceNow))))" }
+                    .joined(separator: "\n"))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                label("For other agents")
+                PaneIDButton(paneID: context.paneID, workspace: context.target.workspace, machine: machine)
+                Text("Copy this ID into another agent's prompt so it can message this session.")
+                    .font(Theme.mono(9.5)).foregroundStyle(Theme.faint).fixedSize(horizontal: false, vertical: true)
+            }
+            Rectangle().fill(Theme.line).frame(height: 1)
+            Text("Herdr").font(Theme.mono(9, .semibold)).tracking(1).foregroundStyle(Theme.faint)
+            if let row = context.agent {
                 field("Tab", "\(row.agent.tabName) · \(row.agent.tabID)")
                 field("Pane", row.agent.paneID)
-                field("Directory", row.agent.directory ?? "Not reported")
-                if row.agent.isLaunchPending { field("Launch", "Pending in Herdr") }
             } else {
                 field("Pane", context.target.title)
             }
-            field("Machine", context.machine.machine.isLocal ? "Local" : "\(context.machine.machine.name) · \(context.machine.machine.target ?? "")")
-            field("Herdr session", context.machine.machine.session)
+            field("Herdr session", machine.session)
             field("Terminal ID", context.target.terminalID)
             if let date = cluster.lastSuccess[context.machine.id] {
                 field("Last received", date.formatted(date: .abbreviated, time: .standard))
             }
-            Text("Leaving a session detaches this client only. The pane keeps running in Herdr.")
+            if context.agent?.agent.isLaunchPending == true { field("Launch pending", "Waiting for Herdr") }
+            Text("Leaving a session keeps it running.")
                 .font(Theme.mono(9.5)).foregroundStyle(Theme.faint).fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
@@ -450,9 +555,13 @@ private struct SessionDetails: View {
         .background(Theme.panel)
     }
 
-    private func field(_ label: String, _ value: String) -> some View {
+    private func label(_ text: String) -> some View {
+        Text(text.uppercased()).font(Theme.mono(9, .semibold)).tracking(1).foregroundStyle(Theme.faint)
+    }
+
+    private func field(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased()).font(Theme.mono(9, .semibold)).tracking(1).foregroundStyle(Theme.faint)
+            label(title)
             Text(value).font(Theme.mono(11.5)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -743,18 +852,24 @@ struct DictationButton: View {
                 .buttonStyle(ConsoleButtonStyle(tint: Theme.red, prominent: true))
                 .fixedSize()
                 .help("Stop and transcribe into the prompt editor (⇧⌘M)")
+                .accessibilityLabel("Stop dictation")
                 Button { model.cancelDictation() } label: { Text("×") }
                     .buttonStyle(ConsoleButtonStyle(tint: Theme.dim))
                     .help("Discard this recording")
+                    .accessibilityLabel("Discard recording")
                 modelStatus(dictation.model)
             } else if case .transcribing = dictation.state, mine {
                 Text(compact ? "…" : dictation.model == .ready ? "TRANSCRIBING…" : "LOADING MODEL…")
-                    .font(Theme.mono(10, .semibold)).foregroundStyle(Theme.phosphor).fixedSize()
+                    .font(Theme.mono(11, .semibold)).foregroundStyle(Theme.phosphor).fixedSize()
+                    .frame(minWidth: 16, minHeight: 14)
+                    .help(dictation.model == .ready ? "Transcribing your recording…" : "Loading the speech model…")
+                    .accessibilityLabel(dictation.model == .ready ? "Transcribing" : "Loading the speech model")
                 modelStatus(dictation.model)
             } else {
                 Button { model.toggleDictation() } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "mic.fill").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "mic.fill").font(.system(size: compact ? 11 : 10, weight: .semibold))
+                            .frame(width: compact ? 16 : nil, height: compact ? 14 : nil)
                         if !compact { Text("DICTATE") }
                     }
                 }
@@ -763,6 +878,7 @@ struct DictationButton: View {
                 .disabled(!dictation.isReady)
                 .help(dictation.isReady ? "Dictate a prompt (⇧⌘M). It is transcribed on this Mac."
                                         : "Dictation is busy with another session")
+                .accessibilityLabel("Dictate a prompt")
             }
         }
     }
@@ -872,5 +988,18 @@ struct BrowserSplit<Terminal: View, Browser: View>: View {
                 fraction = browserWidth(in: total, fraction: width / available) / available
             })
             .accessibilityHidden(true)
+    }
+}
+
+/// A thin line filled to `fraction`, in the console's line color behind it.
+private struct UsageLine: View {
+    let fraction: Double
+    let tint: Color
+
+    var body: some View {
+        Theme.line.overlay(alignment: .leading) {
+            GeometryReader { proxy in tint.frame(width: proxy.size.width * min(1, max(0, fraction))) }
+        }
+        .frame(height: 3).clipShape(Capsule())
     }
 }

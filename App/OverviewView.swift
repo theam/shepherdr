@@ -25,7 +25,7 @@ struct OverviewView: View {
                     NoticeView(title: "Saved machines could not be refreshed", message: failure.message, detail: failure.detail)
                 }
                 ForEach(cluster.machines.filter { $0.failure != nil }) { state in
-                    NoticeView(title: "\(state.machine.name): \(state.connection.title)" + (state.isStale ? " · showing last known data" : ""),
+                    NoticeView(title: "\(state.machine.name): \(state.connection.title)" + (state.isStale ? " · showing the last known state" : ""),
                                message: state.failure?.message ?? "", detail: state.failure?.detail)
                 }
                 tabSelector

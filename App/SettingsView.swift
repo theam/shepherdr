@@ -42,7 +42,7 @@ private struct GeneralSettings: View {
                     Text("Unlocked — type and send prompts").tag(TerminalMode.control.rawValue)
                     Text("Locked — read-only").tag(TerminalMode.observe.rawValue)
                 }
-                Text("Live never takes input from another client. When one is attached, Shepherdr watches and offers Take Over.")
+                Text("If someone else is already using a session, Shepherdr only watches it and offers Take Over.")
                     .font(.caption).foregroundStyle(.secondary)
                 Picker("Refresh sessions", selection: $refreshSeconds) {
                     Text("Every 5 seconds").tag(5)
@@ -57,14 +57,16 @@ private struct GeneralSettings: View {
                         Button("Choose…") { chooseProjectsFolder() }
                     }
                 }
-                Text("New Session's folder picker starts here, a folder name alone means a folder inside it, and GitHub repositories are cloned into it. Other machines have their own in Machines.")
+                Text("New Session starts here, and GitHub projects are copied here.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .help("A folder name alone means a folder inside it. Other machines have their own projects folder in Machines.")
             }
             UpdateSettings(updates: updates)
             Section("Notifications") {
                 Toggle("Notify when an agent finishes or needs you", isOn: $notifies)
-                Text("Shows the session, its state and what the agent last said. Click one to open the session. The session you are looking at never notifies.")
+                Text("Click a notification to open its session.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .help("A notification shows the session, its state and what the agent last said. The session you are looking at never notifies.")
             }
             Section("Terminal font") {
                 Picker("Font", selection: $fontFamily) {
@@ -83,7 +85,7 @@ private struct GeneralSettings: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.background, in: RoundedRectangle(cornerRadius: 4))
-                Text("Used by the terminal and the prompt composer. Only monospaced fonts are listed. Ligatures make busy terminals redraw more slowly.")
+                Text("Used by the terminal and the prompt editor. Only fixed-width fonts are listed.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -124,13 +126,14 @@ private struct UpdateSettings: View {
                 }
             }
             Text(caption).font(.caption).foregroundStyle(.secondary)
+                .help("Before replacing itself, Shepherdr checks the download against the release's checksums, and that the new app is signed by The Agile Monkeys and notarized by Apple. Then it restarts in the new version.")
         }
     }
 
     private var caption: String {
-        guard updates.canUpdate else { return "This build isn't a signed release, so it doesn't update itself." }
+        guard updates.canUpdate else { return "This build isn't a signed release, so it can't update itself." }
         let checked = updates.lastCheck.map { "Last checked \($0.formatted(date: .abbreviated, time: .shortened)). " } ?? ""
-        return checked + "New versions come from GitHub. Before replacing itself, Shepherdr checks the download against the release's checksums and that the new app is signed by The Agile Monkeys and notarized by Apple; then it restarts in the new version."
+        return checked + "Updates come from GitHub and are checked before installing."
     }
 }
 
@@ -167,7 +170,7 @@ private struct MachineSettings: View {
                 } label: {
                     Label("Add Machine…", systemImage: "plus")
                 }
-                Text("Saved in Herdr's machine catalog. Disable to stop polling without forgetting it.")
+                Text("Disable a machine to stop checking it without removing it.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button {
@@ -188,7 +191,7 @@ private struct MachineSettings: View {
                 change(state) { try await cluster.removeMachine(state.id) }
             }
         } message: { _ in
-            Text("Herdr forgets this saved SSH profile. Its remote server and sessions keep running; add it again to return.")
+            Text("Shepherdr forgets this machine. Its sessions keep running there; you can add it again any time.")
         }
     }
 
@@ -210,6 +213,16 @@ private struct MachineRow: View {
     let remove: () -> Void
     @ViewState<Bool> private var expanded = false
 
+    /// The Herdr details kept out of sight.
+    private var rowHelp: String {
+        var parts = ["Herdr session: \(state.machine.session)"]
+        if let snapshot = state.snapshot {
+            parts.append("Herdr \(snapshot.version)")
+            parts.append("\(snapshot.workspaces.count) workspaces")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
@@ -222,12 +235,12 @@ private struct MachineRow: View {
                 }
                 HStack(spacing: 6) {
                     Text(state.machine.target ?? "This Mac")
-                    Text("· session \(state.machine.session)")
                     if let snapshot = state.snapshot {
-                        Text("· Herdr \(snapshot.version) · \(snapshot.workspaces.count) workspaces · \(snapshot.agents.count) agents")
+                        Text("· \(snapshot.agents.count) \(snapshot.agents.count == 1 ? "session" : "sessions")")
                     }
                 }
                 .font(.caption).foregroundStyle(.secondary).padding(.leading, 26)
+                .help(rowHelp)
                 if !state.machine.isLocal { ProjectsFolderField(machine: state.machine) }
                 if let failure = state.failure {
                     VStack(alignment: .leading, spacing: 2) {
@@ -248,9 +261,9 @@ private struct MachineRow: View {
                 ProgressView().controlSize(.small)
             } else if !state.machine.isLocal {
                 Button(state.machine.isEnabled ? "Disable" : "Enable", action: toggle)
-                    .help(state.machine.isEnabled ? "Stop polling this machine; keep its profile" : "Resume polling this machine")
+                    .help(state.machine.isEnabled ? "Stop checking this machine without removing it" : "Start checking this machine again")
                 Button(role: .destructive, action: remove) { Image(systemName: "trash") }
-                    .help("Remove this machine from Herdr…")
+                    .help("Remove this machine…")
             }
         }
         .padding(.vertical, 4)
@@ -290,8 +303,9 @@ private struct AgentSettings: View {
     var body: some View {
         Form {
             Section {
-                Text("Agents use the shepherdr command and its skill for Claude Code and Codex to start sessions that Shepherdr links to theirs, and to hand work back. Shepherdr installs them over SSH, in ~/.shepherdr and the agents' skill folders. Machines never connect to this Mac: agents leave letters in ~/.shepherdr there, and Shepherdr collects them.")
+                Text("Lets agents open sessions on your machines and hand their work back.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .help("Agents use the shepherdr command and its skill for Claude Code and Codex. Shepherdr installs them over SSH, in ~/.shepherdr and the agents' skill folders. Machines never connect to this Mac: agents leave letters in ~/.shepherdr there, and Shepherdr collects them.")
             }
             Section("Machines") {
                 ForEach(model.cluster.machines.filter(\.machine.isEnabled)) { state in
@@ -308,7 +322,8 @@ private struct AgentSettings: View {
             Section("This Mac") {
                 TextField("Name in the machine lists", text: $macName, prompt: Text(MachineList.defaultMacName))
                     .onSubmit { tools.setMacName(macName) }
-                Text("Agents on other machines use this name to ask for a session here. Press Return to save it; leave it empty for the computer's name.")
+                Text("Agents on other machines use this name to ask for a session here. Press Return to save.")
+                    .help("Leave it empty to use the computer's name.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -427,7 +442,7 @@ private struct AddMachineSheet: View {
                 TextField("Remote session", text: $session, prompt: Text("default"))
             }
             .formStyle(.grouped)
-            Text("Herdr connects over SSH and prepares its server on that machine, which may install or start Herdr there. SSH must work without a password prompt — load your key into ssh-agent first. If it needs interaction, run this in Terminal instead:")
+            Text("Connects over SSH, which must work without a password prompt (load your key into ssh-agent first). This may install Herdr there. If it needs your input, run this in Terminal instead:")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text(command).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 .padding(8).frame(maxWidth: .infinity, alignment: .leading)

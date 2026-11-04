@@ -56,14 +56,16 @@ struct CompassSettings: View {
                     timePicker("To", binding(\.schedule.to))
                     days
                 }
-                Text("A run the Mac misses, asleep or with Shepherdr closed, happens once when it can, the same day. A run waits while you're typing to the agent. Shepherdr has to be open to run Compass.")
+                Text("Shepherdr must be open to run Compass. A missed run happens once, later the same day.")
+                    .help("A run also waits while you're typing to the agent.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Agent") {
                 Picker("Agent", selection: binding(\.agent)) {
                     ForEach(NewSessionRequest.agentKinds, id: \.self) { kind in Text(AgentProgram(label: kind).name).tag(kind) }
                 }
-                Text("Takes effect when the next day starts a fresh agent. Claude Code reads its permissions from .claude/settings.json in the folder; other agents ask as they usually do.")
+                Text("Takes effect the next day, when a fresh agent starts.")
+                    .help("Claude Code reads its permissions from .claude/settings.json in the folder; other agents ask as they usually do.")
                     .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Folder") {
                     HStack(spacing: 8) {
@@ -74,8 +76,8 @@ struct CompassSettings: View {
                 }
             }
             Section("Page") {
-                timePicker("Day strip from", binding(\.strip.from))
-                timePicker("Day strip to", binding(\.strip.to))
+                timePicker("Page shows hours from", binding(\.strip.from))
+                timePicker("Page shows hours to", binding(\.strip.to))
                 LabeledContent("Template") {
                     HStack(spacing: 8) {
                         Text(compass.templateIsCustomized ? "Yours: Shepherdr doesn't update it" : "Shepherdr's").foregroundStyle(.secondary)
@@ -84,7 +86,7 @@ struct CompassSettings: View {
                         }
                     }
                 }
-                Text("The agent copies the template on each day's first run, so earlier pages keep their look.")
+                Text("Each day starts from a fresh copy of the template; earlier pages keep their look.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Backup") {
@@ -103,10 +105,11 @@ struct CompassSettings: View {
                         Text("⚠︎ This repository is public. Your Compass pages summarize your day: make it private on GitHub.")
                             .font(.caption).foregroundStyle(Theme.amber)
                     }
-                    Text("The folder is a Git repository: every run commits it. With a remote, use a private one, Shepherdr pushes after each run, so a new Mac can restore every page from Compass's welcome screen. Git runs without asking: keep SSH keys in your agent, or a credential helper for HTTPS.")
+                    Text("Every run is saved in Git, and pushed to the remote if you set one, so a new Mac can restore your pages. Use a private remote, with its SSH key loaded in your agent: Git never asks for a password.")
+                        .help("For HTTPS, use a credential helper instead.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text("Backups need Git. Install the Command Line Tools with xcode-select --install, or Git with Homebrew.")
+                    Text("Backups need Git. Install it with xcode-select --install, or with Homebrew.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
