@@ -27,7 +27,7 @@ A bilingual (English/Spanish) quick guide with the same content comes with the a
 - **Sessions on hold:** mark a session as waiting for others, such as a planner waiting for the subagents it launched. It shows an hourglass until they finish, and the sessions it waits for are listed under it, in a tree you can collapse.
 - **Compass:** the window's first mode, before Agents (**⌥⌘1** and **⌥⌘2**), with a page of your day kept by an agent of its own on this Mac. It starts by summing up your sessions; ask it in its terminal to cover more, such as your calendar or mail. It updates on the schedule you choose, keeps every day's page and a copy per run in `~/.shepherdr/compass`, commits them to Git and can push them to a private repository. Buttons on the page start the sessions it suggests, once you check them in New Session.
 - **Agents that coordinate:** Shepherdr installs a small `shepherdr` command and a skill for Claude Code and Codex on each machine, Linux included. An agent asked to "start a session on buildbox" starts it there, nested under its own session, which goes on hold until the new one finishes: starting sessions always fans out. When you ask the new session to hand its result back, it does with `shepherdr handoff`, and Shepherdr delivers it as a prompt once the coordinator is free. Machines never connect to your Mac: Shepherdr collects what agents leave for it.
-- **Shepherdr Remote on iPhone:** turn on the relay in **Settings → Remote** and pair your iPhone with a QR code. The phone shows this Mac's queue and the terminal of any session on any of your machines, fitted to its screen, and sends prompts you type or dictate. It reaches your Mac through Tailscale, over TLS, never over SSH. Its herd mode turns unblocking your sessions into an arcade game. See [Shepherdr Remote](#shepherdr-remote-on-iphone).
+- **Shepherdr Remote on iPhone and Android:** turn on the relay in **Settings → Remote** and pair your phone with a QR code. The phone shows this Mac's queue and the terminal of any session on any of your machines, fitted to its screen, and sends prompts you type or dictate. It reaches your Mac through Tailscale, over TLS, never over SSH. Its herd mode turns unblocking your sessions into an arcade game. See [Shepherdr Remote](#shepherdr-remote-on-iphone-and-android).
 - **Create and close sessions:** **⌘N** creates a Herdr workspace in a folder with Claude Code, Codex or any other supported agent and its first prompt, or with a shell to start one in later. Create one in a group with its **+**, or next to a session with **New Session in Same Folder…** (**⇧⌘N**). **Close Session…** in a session's context menu ends its pane after confirmation. **Rename…** renames its Herdr workspace.
 - **Overview:** how many sessions need you, are working, done or idle, and a card per machine with its sessions and its processor, memory and disk use. Click states and machines to list the sessions in any combination of them. Plain shell panes are listed separately.
 - **GitHub inbox:** the overview's **GITHUB** tab lists what the repositories you follow ask of you: pull requests awaiting your review, issues assigned to you and your own open pull requests, with their checks and the pull requests linked to each issue. **SUGGEST ORDER** lists the pull requests in the order to take them on.
@@ -389,11 +389,19 @@ You can run Shepherdr on more than one Mac, such as on a Mac that another one ke
 
 When you let something through, Shepherdr first takes the letter on the machine it came from. If that machine doesn't answer, the item says it waits for it, and goes ahead once it does. A session started for a request, and a pane that got a handoff, keep a note of it in Herdr, so nothing starts or arrives twice, even after a restart. Letters no Shepherdr takes are filed after a week. A Shepherdr older than 0.9.2 still takes every letter it reads, so update them all.
 
-## Shepherdr Remote on iPhone
+## Shepherdr Remote on iPhone and Android
 
-Shepherdr Remote is an iPhone app for this Mac's Shepherdr: the queue, the terminal of every session on every machine the Mac sees, and the prompt composer, with dictation. It talks to Shepherdr on your Mac and nothing else. The Mac already reaches your machines, so the phone needs no SSH access to any of them, nor the Mac to accept SSH.
+Shepherdr Remote is an iPhone and Android app for this Mac's Shepherdr: the queue, the terminal of every session on every machine the Mac sees, and the prompt composer, with dictation. It talks to Shepherdr on your Mac and nothing else. The Mac already reaches your machines, so the phone needs no SSH access to any of them, nor the Mac to accept SSH.
 
-It is not on the App Store yet: build it from this repository with Xcode (see [DEVELOPMENT](DEVELOPMENT.md#shepherdr-remote-ios)). It needs iOS 26 or later, and Tailscale on the phone and on the Mac.
+It is not on the App Store or Google Play yet, so you build it from this repository. Both apps do the same, and this section says where they differ.
+
+### Set up your phone
+
+1. **Tailscale** on the Mac and on the phone, signed in to the same account. That is how the phone reaches your Mac, at home or away.
+2. **The app.** On iPhone (iOS 26 or later), build it with Xcode: see [DEVELOPMENT](DEVELOPMENT.md#shepherdr-remote-ios). On Android (10 or later), build the APK with Gradle, as [DEVELOPMENT](DEVELOPMENT.md#shepherdr-remote-android) explains, or install one a teammate shares: open the `.apk` on the phone and let the browser or Files install unknown apps.
+3. **On an Android phone with a work profile**, the apps with a briefcase, put Tailscale and Shepherdr Remote in the same profile: Android's VPNs only carry their own profile's apps, so the app times out while Tailscale says it's connected. If your work account can't sign in to Tailscale in the personal profile, add the phone with an auth key instead: create one in Tailscale's admin console under **Settings → Keys**, then in the app open **Settings → Accounts → ⋮ → Use an auth key**. The key only adds the phone; to keep it in your tailnet past Tailscale's 180 days, choose **Disable key expiry** for it under **Machines**.
+4. **Turn on the relay** and **pair the phone**, as below.
+5. **Try it away from home:** turn off the phone's Wi-Fi. The queue stays live over mobile data.
 
 ### Turn on the relay
 
@@ -404,34 +412,34 @@ In **Settings → Remote**, turn on **Let Shepherdr Remote connect**. The relay 
 
 The Mac has to be awake, with Shepherdr open, for the phone to reach it: the coffee cup keeps it awake while it's plugged in. While a phone is connected, Shepherdr refreshes your machines as often as when its window is on screen.
 
-### Pair your iPhone
+### Pair your phone
 
-Click **Pair iPhone…**. A QR code shows, good once and for five minutes. In Shepherdr Remote, tap **Scan Pairing Code** and point the camera at it, or click **Copy Link** on the Mac and tap **Paste Pairing Link** on the phone. The phone trusts that one certificate from then on and keeps its key in its keychain; the Mac keeps only a hash of it. **Paired phones** lists them with when each was last seen; **Remove** forgets one, and **New Certificate…** forgets them all.
+Click **Pair iPhone…**, which pairs an Android phone just the same. A QR code shows, good once and for five minutes. In Shepherdr Remote, tap **Scan Pairing Code** and point the camera at it, or click **Copy Link** on the Mac and tap **Paste Pairing Link** on the phone. On Android, the scanner is Google's, from Google Play services, so the app never holds the camera. The phone trusts that one certificate from then on and keeps its key in its keychain, or on Android encrypted with a key of the Android Keystore that never leaves the phone; the Mac keeps only a hash of it. **Paired phones** lists them with when each was last seen; **Remove** forgets one, and **New Certificate…** forgets them all.
 
 ### On the phone
 
 - **The queue** is the Mac's, in its order: groups, project headings, the sessions each one waits for nested under it, and shells. Lines tie them as the sidebar draws them: one down each group and each project, and └ from a session to the ones it waits for. Each session shows its state as the Mac does, and its pull request when it has one (**⇄ #12**, with ✓ or ✗ for its checks), or how many. Pull down to reconnect.
 - **Search** narrows the queue as you type, to the sessions and shells with every word in their name, summary, agent, panes, state or resources, such as a pull request's number or title. `@name` keeps a machine's.
-- **Compass** sits at the top of the queue once it is set up on the Mac, with what its agent is doing and when it runs next; a dot means today's page changed. Tap it for the page, fitted to the phone, and the calendar for another day's. **RUN** updates it now, **Cancel Run** stops waiting for a run, and **Agent** opens the Compass agent's terminal and composer. The page's own buttons need the Mac, so they do nothing on the phone; its links open in Safari.
-- **A session** shows one pane at a time, its terminal fitted to the phone's screen. When its Herdr tab is split, the panes are tabs at the top. Tap the terminal and type into it. Swipe up and down on it to scroll back through the conversation; a flick carries on and slows down. The row above the composer has the keys a phone lacks: Esc, ⇧⏎, the arrows, Tab, ^C, 1, 2, 3 and Return for agents' numbered menus, and ⇞ ⇟ to scroll ten lines at a time. **Aa** makes the text larger or smaller. When the session has resources, **≡** lists them as the Mac's Resources column does: pull requests with their state and checks, issues, Claude artifacts, links and the repository. Tap one to open it in Safari, or hold it to copy the link.
+- **Compass** sits at the top of the queue once it is set up on the Mac, with what its agent is doing and when it runs next; a dot means today's page changed. Tap it for the page, fitted to the phone, and the calendar for another day's. **RUN** updates it now, **Cancel Run** stops waiting for a run, and **Agent** opens the Compass agent's terminal and composer. The page's own buttons need the Mac, so they do nothing on the phone; its links open in Safari, or on Android in your browser.
+- **A session** shows one pane at a time, its terminal fitted to the phone's screen. When its Herdr tab is split, the panes are tabs at the top. Tap the terminal and type into it. Swipe up and down on it to scroll back through the conversation; a flick carries on and slows down. The row above the composer has the keys a phone lacks: Esc, ⇧⏎, the arrows, Tab, ^C, 1, 2, 3 and Return for agents' numbered menus, and ⇞ ⇟ to scroll ten lines at a time. **Aa** makes the text larger or smaller. On Android, holding the terminal copies its screen. When the session has resources, **≡** lists them as the Mac's Resources column does: pull requests with their state and checks, issues, Claude artifacts, links and the repository. Tap one to open it in Safari, or on Android in your browser, and hold it to copy the link.
 - **While the phone shows a pane, it drives it** at the phone's size. If this Mac had it open, it lets go and says so; **RECONNECT** on the Mac takes it back. If another client controls it, such as Herdr's own, the phone watches, and **TAKE OVER** is your call.
-- **The composer** sends a prompt as Shepherdr's prompt editor does: pasted, then Return. The microphone dictates it on the iPhone, with Apple's on-device speech recognition; choose its language in the app's settings. The first time, iOS may download that language.
-- iOS suspends apps in the background, so the app lets go of the Mac and connects again when you come back. It doesn't notify you while it's closed.
+- **The composer** sends a prompt as Shepherdr's prompt editor does: pasted, then Return. The microphone dictates it on the iPhone, with Apple's on-device speech recognition; choose its language in the app's settings. The first time, iOS may download that language. On Android it uses the phone's speech recognition, on the device when the phone has it (Android 12 or later); download the language in the phone's speech settings to dictate without a connection.
+- iOS and Android suspend apps in the background, so the app lets go of the Mac and connects again when you come back. It doesn't notify you while it's closed.
 
 ### Herd mode
 
 The gamepad button at the top of the queue turns it into an arcade game; **QUEUE** goes back to the list. The sessions that stopped are sheep astray: those that need you first, then the done ones, then the idle ones, each in the queue's order. The ones working graze in the pasture at the top, with Shepherdr's dog behind them, and the ones on hold are left out, as they carry on by themselves. Shells don't play.
 
-- **PRESS START** starts a game with the queue as it is. The goal is to leave no session astray: get each one working again, or close it. Only what you do from this iPhone scores:
+- **PRESS START** starts a game with the queue as it is. The goal is to leave no session astray: get each one working again, or close it. Only what you do from this phone scores:
   - **10** when a done or idle session works again after your prompt;
   - **50** when a session that needed you moves on after you answer it, with the keys row or in its terminal;
   - **100** when you close a finished session by leaving its agent from its terminal, such as with `/exit`. Closing one that still needed you clears it but scores nothing.
 - **Combos.** Scoring again within 90 seconds multiplies the points by 2, then 3, up to 5.
 - **Queue clear.** The moment no session is astray, every one working, on hold or closed, you win: 500 points, plus 10 for each minute under half an hour the game took.
 - **Game over.** The clock gives you ten minutes, and each answer, prompt or key you send to a session astray starts it again. When it runs out, the game is over. **GIVE UP** ends it too. The clock stops while the app, open, can't reach your Mac; it doesn't stop while the app is in the background.
-- **High scores.** A score among the ten best, won or lost, asks for your initials, arcade style: ▲ and ▼ change a letter, and **OK** puts them in the table. The table and a game under way stay on the iPhone, even if the app quits.
+- **High scores.** A score among the ten best, won or lost, asks for your initials, arcade style: ▲ and ▼ change a letter, and **OK** puts them in the table. The table and a game under way stay on the phone, even if the app quits.
 - The points pop up over whatever you look at. A session you close while you look at it takes you back to the game, and a game that ends shows how it went.
-- The sounds are 8-bit, made on the phone. They follow the silent switch and wait while you dictate, and the speaker button mutes them.
+- The sounds are 8-bit, made on the phone. They follow the silent switch, or Android's silent and vibrate modes, and wait while you dictate, and the speaker button mutes them.
 
 ## Compass
 

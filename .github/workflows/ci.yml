@@ -20,6 +20,9 @@ jobs:
         run: xcodebuild -project Shepherdr.xcodeproj -scheme Shepherdr -configuration Debug -destination 'platform=macOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO test
       - name: Agent tools command line
         run: sh Tests/AgentTools/test.sh
+      # Android's protocol tests read what this Swift code encodes: the fixture must be current.
+      - name: Android protocol fixture
+        run: sh Android/scripts/golden-protocol.sh --check
   # The command line Shepherdr installs on other machines must run on Linux too, in the shells
   # agents meet there.
   agent-tools-linux:
@@ -51,3 +54,20 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: '1'
       - name: Command line against Herdr
         run: sh Tests/AgentTools/herdr-live.sh
+  # Shepherdr Remote for Android: the protocol and herd mode's rules, and a debug build.
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Android
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Tests and debug build
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug

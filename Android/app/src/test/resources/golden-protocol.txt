@@ -1,0 +1,31 @@
+#CLIENT
+{"hello":{"deviceID":"d","token":"t","version":1}}
+{"pair":{"code":"c","deviceName":"Phone","version":1}}
+{"attach":{"channel":3,"columns":52,"pane":{"machineID":"remote:buildbox","terminalID":"term_1"},"rows":30}}
+{"takeOver":{"channel":3}}
+{"detach":{"channel":3}}
+{"input":{"bytes":"GwD\/","channel":3}}
+{"resize":{"channel":3,"columns":60,"rows":20}}
+{"scroll":{"channel":3,"lines":10,"up":true}}
+{"prompt":{"pane":{"machineID":"remote:buildbox","terminalID":"term_1"},"text":"fix the flaky test\nplease"}}
+{"compassRun":{}}
+{"compassCancel":{}}
+{"compassPage":{}}
+{"compassPage":{"day":"2026-11-02"}}
+{"ping":{}}
+#SERVER
+{"welcome":{"macName":"Studio","version":1}}
+{"paired":{"deviceID":"d","macName":"Studio","token":"t"}}
+{"refused":{"reason":"No"}}
+{"queue":{"_0":{"compass":{"activity":"✓ updated 09:00","agent":{"depth":2,"id":"s:1","inGroup":true,"inProject":true,"kind":"session","needsYou":0,"number":1,"panes":[{"isAgent":true,"pane":{"machineID":"remote:buildbox","terminalID":"term_1"},"title":"claude"}],"resources":[{"checks":"passed","kind":"pullRequest","name":"theam\/shepherdr#12","state":"open","title":"Fix login","url":"https:\/\/github.com\/theam\/shepherdr\/pull\/12"}],"session":{"machineID":"remote:buildbox","terminalID":"term_1"},"status":"needsYou","title":"fix-login","tree":{"depth":1,"guides":[true],"isLast":false,"nested":2}},"days":["2026-11-02","2026-11-01"],"hasNews":true,"isRunning":false,"needsYou":false,"next":"next run 14:00","pageModified":800000000,"today":"2026-11-02"},"macName":"Studio","machines":[{"connection":"online","id":"local","isOnline":true,"name":"Local"}],"rows":[{"depth":2,"id":"s:1","inGroup":true,"inProject":true,"kind":"session","needsYou":0,"number":1,"panes":[{"isAgent":true,"pane":{"machineID":"remote:buildbox","terminalID":"term_1"},"title":"claude"}],"resources":[{"checks":"passed","kind":"pullRequest","name":"theam\/shepherdr#12","state":"open","title":"Fix login","url":"https:\/\/github.com\/theam\/shepherdr\/pull\/12"}],"session":{"machineID":"remote:buildbox","terminalID":"term_1"},"status":"needsYou","title":"fix-login","tree":{"depth":1,"guides":[true],"isLast":false,"nested":2}},{"depth":0,"id":"g:1","inGroup":false,"inProject":false,"kind":"group","needsYou":2,"panes":[],"resources":[],"title":"Release"}]}}}
+{"terminal":{"channel":3,"state":"controlledElsewhere"}}
+{"terminal":{"channel":4,"message":"bye","state":"ended"}}
+{"reset":{"channel":3}}
+{"failure":{"message":"x"}}
+{"compassPage":{"day":"2026-11-02","html":"<h1>Today<\/h1>"}}
+{"compassPage":{"day":"2026-10-30"}}
+{"pong":{}}
+#INVITE
+shepherdr-remote://pair?n=Javier%E2%80%99s%20MacBook%20Pro&h=100.101.102.103,192.168.1.20&p=1337&f=abc-_123&c=c0de
+#FINGERPRINT
+DtOmq5V_9vWaljCkc9MafQT8tGVIuJAWGWmAx-llhPY

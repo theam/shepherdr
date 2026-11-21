@@ -1,0 +1,5 @@
+<resources>
+    <color name="background">#FF090C0A</color>
+    <!-- The edge of the icon's art. -->
+    <color name="icon_background">#FF050B08</color>
+</resources>

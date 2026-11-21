@@ -1,0 +1,27 @@
+Shepherdr Remote for Android
+Copyright (c) 2026 The Agile Monkeys and Shepherdr contributors. MIT License.
+
+It is built on these, each under its own license:
+
+Fira Code 6.2, by Nikita Prokopov and contributors
+  SIL Open Font License 1.1 (below)
+
+Termux terminal-emulator and terminal-view 0.118.0, by the Termux developers
+  Apache License 2.0
+
+OkHttp 4.12.0 and Okio, by Square, Inc.
+  Apache License 2.0
+
+kotlinx.serialization and the Kotlin standard library, by JetBrains s.r.o.
+  Apache License 2.0
+
+Kotlin coroutines, by JetBrains s.r.o.
+  Apache License 2.0
+
+AndroidX and Jetpack Compose, by The Android Open Source Project
+  Apache License 2.0
+
+Google Play services code scanner, by Google LLC
+  Android Software Development Kit License
+
+The Apache License 2.0 and the SIL Open Font License 1.1 follow.

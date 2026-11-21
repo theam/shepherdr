@@ -74,7 +74,7 @@ App/                              SwiftUI presentation: queue sidebar, work area
   CompassViews.swift              The mode tabs, Compass's column and work area, and its welcome screen
   ReadinessMonitor.swift          Sleep, dark wakes and the network, for agents Shepherdr starts or prompts unattended
   GitHubInbox*.swift              The overview's GitHub inbox: its sync with GitHub, its columns and suggested order
-Sources/ShepherdrRemote/           The relay's wire protocol, shared with the iOS app: messages, binary frames, pairing links, fingerprints; herd mode's rules
+Sources/ShepherdrRemote/           The relay's wire protocol, shared with the iOS app and ported to Kotlin in Android/: messages, binary frames, pairing links, fingerprints; herd mode's rules
 Sources/ShepherdrCore/
   Remote/                         The relay's TLS identity (a self-signed P-256 certificate in DER), its WebSocket server and the paired phones
   Transport/                      CLI adapters, executable discovery, bounded process/stream transports, agent tools and mailbox, Compass's folder and Git
@@ -90,6 +90,7 @@ Sources/ShepherdrProbe/            Read-only integration diagnostic
 Tests/ShepherdrCoreTests/          Protocol, transport and store regression tests
 Tests/AgentTools/                  The agent tools' command line, against a fake herdr and a real one
 iOS/                               Shepherdr Remote, the iPhone app: XcodeGen project, SwiftUI views, SwiftTerm's UIKit terminal, dictation, herd mode
+Android/                           Shepherdr Remote for Android: Gradle project, Kotlin port of the protocol, Jetpack Compose views, Termux's terminal, dictation, herd mode
 scripts/make-artwork.sh            Regenerates the icon, README header and social preview (see Artwork)
 scripts/pixelate.swift             Turns art into strict pixel art in App/Theme.swift's palette
 scripts/make-icon.swift            Renders App/Assets.xcassets/AppIcon.appiconset from docs/assets/icon.png
@@ -142,6 +143,32 @@ The relay logs each connection under the subsystem `com.theagilemonkeys.Shepherd
 - Groups, holds and resources live in the copy's user defaults (`sessionOrder.v2`, `sessionWaits.v1`, `sessionState.v1`, all JSON). Quit the copy, edit them with `defaults export` and `defaults import`, and open it again. A folder at `~/.shepherdr/compass` with a `compass.json` of `{"enabled": false}` and pages in `days/` gives it a Compass that never starts an agent.
 
 `RelayServerTests` run a real TLS WebSocket on loopback with the identity in a temporary keychain, a client pinning the right fingerprint and one pinning another.
+
+## Shepherdr Remote (Android)
+
+The Android companion lives in `Android/`, a Gradle project (`./gradlew` from that folder) in Kotlin and Jetpack Compose. It needs JDK 17 or later and the Android SDK with platform 36; Android Studio opens the folder as is. It runs on Android 10 or later, the first with TLS 1.3. It does what the iPhone app does, screen by screen, and its sources follow the iOS ones by name.
+
+```sh
+cd Android
+./gradlew :app:testDebugUnitTest      # the protocol and herd mode's rules
+./gradlew :app:assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Debug builds add `.dev` to the application ID and are named **Shepherdr dev**, as iOS's `BUNDLE_ID_SUFFIX` keeps a personal build apart.
+
+**Release builds** are what Google Play gets: `./gradlew :app:bundleRelease` makes `app/build/outputs/bundle/release/app-release.aab`, minified and shrunk with R8, and signed with the upload key `Android/keystore.properties` points at (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); git ignores that file, and without it the bundle comes out unsigned. To install a bundle as Play would, split for one phone, use [bundletool](https://github.com/google/bundletool): `java -jar bundletool.jar build-apks --bundle=app-release.aab --output=app.apks --connected-device --ks=<upload.jks> --ks-key-alias=upload --ks-pass=file:<password file>`, then `java -jar bundletool.jar install-apks --apks=app.apks`. Settings → About lists the licenses the app ships under, from `app/src/main/assets/licenses` and Fira Code's own. The build takes Fira Code from `Sources/ShepherdrTerminalUI/Resources/Fonts` and herd mode's pictures from `iOS/ShepherdrRemote/Assets.xcassets`, renamed as Android's resources want them, so they stay in one place.
+
+- **The protocol** is a Kotlin port of `Sources/ShepherdrRemote` (`protocol/`): the messages in the JSON Swift's `Codable` makes (an enum case is an object with one key, `_0` for an unlabeled value, `Data` in base64, `Date` in seconds since 2001), `RemoteFrame`, pairing links, fingerprints, `QueueSearch`, and herd mode's rules, `Herd`, `HerdGame` and `HerdScores`, with the Mac's `HerdTests` ported. `app/src/test/resources/golden-protocol.txt` is what the Mac's own code encodes for every message, and the tests check that each side reads the other. When a message changes, run `Android/scripts/golden-protocol.sh`, which builds `GoldenProtocol.swift` against `Sources/ShepherdrRemote` and writes the fixture; `--check` fails when the fixture is out of date, as CI runs it.
+- **The relay.** `RelaySocket` is an OkHttp WebSocket on TLS 1.3 only, with a trust manager that accepts exactly the certificate whose public key, as Apple's Security framework exports a P-256 key (`04 ‖ X ‖ Y`), has the pairing link's fingerprint. Host names aren't checked: the certificate names the Mac, not the address the phone dials. `RelayClient` mirrors iOS's: each address in turn, 12 seconds for the Mac to answer, a ping every 20 seconds, reconnecting with backoff up to 15 seconds, and terminals that attach again after a reconnect. The connection lives while the app is in front (`ProcessLifecycleOwner`). Tokens are encrypted with AES-GCM under an Android Keystore key, and the app allows no backups, as iOS keeps them in the keychain for this device only.
+- **The terminal** is Termux's emulator and renderer (`com.termux.termux-app:terminal-emulator` and `terminal-view` 0.118.0, Apache 2.0, from JitPack), fed with Herdr's frames in `RemoteTerminalView`, in the Mac's palette. What the emulator would answer a program, such as a cursor report, goes nowhere: the frames are Herdr's paint of a screen. Swiping sends Herdr scroll requests, a line per row, with a flick that slows as iOS's does, at most 30 a second.
+- **Pairing** scans with Google's code scanner (`play-services-code-scanner`), so the app asks for no camera permission; pasting the link works without Google Play services. `shepherdr-remote://pair` and `shepherdr-remote://session` links open the app.
+- **Dictation** uses Android's `SpeechRecognizer`, on the device when the phone has it (Android 12 or later), and listens again after each pause until you stop it.
+- **Herd mode's** sounds are made on the phone as on iOS, as 16-bit samples played with `AudioTrack`; they stay quiet on silent or vibrate.
+
+**Testing with the emulator.** The emulator reaches the Mac's `127.0.0.1` at `10.0.2.2`, or at `127.0.0.1` itself after `adb reverse tcp:<port> tcp:<port>`, so a copy of the Mac app with `-remoteLoopbackForTesting YES` (see the Simulator's steps above) pairs without changing its link. Launch extras do what iOS's launch arguments do: `adb shell am start -n com.theagilemonkeys.shepherdr.remote.dev/com.theagilemonkeys.shepherdr.remote.MainActivity --es pairInvite "'<link>'"` pairs, and `--es openSession <machine>/<terminal>`, `--ez openCompass true` and `--ez herdStart true` open a session, Compass or a game. `adb exec-out screencap -p > screen.png` takes a screenshot and `adb logcat -s RelayClient` shows why an address didn't answer. `pm clear com.theagilemonkeys.shepherdr.remote.dev` starts over.
+
+**Testing on a phone without a cable.** Turn on **Wireless debugging** in the phone's developer options, with the phone on the Mac's network. While **Pair device with pairing code** shows its code, `adb mdns services` lists the pairing address (`_adb-tls-pairing`); `adb pair <address> <code>` and then `adb connect <address>` with the one on the Wireless debugging screen. Install the release bundle as Play would with bundletool's `--device-id=<address>`. Xiaomi phones refuse installs from a computer until **Install via USB** is on in the developer options, even over Wi-Fi. Without Tailscale, `adb reverse tcp:1337 tcp:1337` gives the phone the relay at its own `127.0.0.1`, which the relay takes as this Mac: put `127.0.0.1` first in the pairing link's `h=` and open it with `adb shell am start -a android.intent.action.VIEW -d '<link>' com.theagilemonkeys.shepherdr.remote`.
 
 ## Artwork
 
